@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VRM Face Rig Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f1a;
+      color: white;
+      overflow: hidden;
+    }
+    #container { 
+      width: 100vw; 
+      height: 100vh;
+    }
+    #status {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 100;
+      border: 1px solid #333;
+    }
+    #status.error {
+      border-color: #ff4444;
+      color: #ff6666;
+    }
+    #status.success {
+      border-color: #44ff44;
+      color: #66ff66;
+    }
+    #loading {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">Initializing...</div>
+  <div id="loading"></div>
+  <div id="container"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+
+    const statusEl = document.getElementById('status');
+    const loadingEl = document.getElementById('loading');
+    
+    function setStatus(msg, type = 'info') {
+      statusEl.textContent = msg;
+      statusEl.className = type;
+    }
+
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 1.5, 3);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1;
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.update();
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    sunLight.position.set(5, 10, 5);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.1;
+    sunLight.shadow.camera.far = 50;
+    sunLight.shadow.camera.left = -10;
+    sunLight.shadow.camera.right = 10;
+    sunLight.shadow.camera.top = 10;
+    sunLight.shadow.camera.bottom = -10;
+    scene.add(sunLight);
+
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+    fillLight.position.set(-5, 2, -5);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xff8888, 0.2);
+    rimLight.position.set(0, 2, -5);
+    scene.add(rimLight);
+
+    // Floor
+    const floorGeometry = new THREE.PlaneGeometry(20, 20);
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x222233,
+      roughness: 0.8,
+      metalness: 0.2
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(20, 40, 0x444466, 0x333344);
+    gridHelper.position.y = 0.01;
+    scene.add(gridHelper);
+
+    let currentVRM = null;
+
+    // Load VRM
+    setStatus('Loading VRM model...', 'info');
+    loadingEl.textContent = 'Downloading model...';
+
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+
+    loader.load(
+      '/vrm/test.vrm',
+      (gltf) => {
+        const vrm = gltf.userData.vrm;
+        
+        if (vrm) {
+          currentVRM = vrm;
+          
+          // Disable frustum culling
+          vrm.scene.traverse((obj) => {
+            obj.frustumCulled = false;
+          });
+          
+          scene.add(vrm.scene);
+          
+          // Position and rotation
+          vrm.scene.position.set(0, 0, 0);
+          vrm.scene.rotation.y = Math.PI;
+          
+          console.log('VRM loaded successfully!', vrm);
+          console.log('Expressions:', vrm.expressionManager?.expressionMap);
+          
+          setStatus('✓ VRM Loaded - press keys for expressions', 'success');
+          
+        } else {
+          setStatus('✗ No VRM found in model file', 'error');
+          loadingEl.textContent = '';
+        }
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          loadingEl.textContent = `Loading... ${percent}%`;
+        } else {
+          loadingEl.textContent = 'Loading...';
+        }
+      },
+      (error) => {
+        console.error('Error loading VRM:', error);
+        setStatus(`✗ Error: ${error.message}`, 'error');
+        loadingEl.textContent = '';
+      }
+    );
+
+    // Animation loop
+    const clock = new THREE.Clock();
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      const delta = clock.getDelta();
+      controls.update();
+      
+      // Update VRM if loaded
+      if (currentVRM) {
+        currentVRM.update(delta);
+      }
+      
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Handle errors
+    window.addEventListener('error', (e) => {
+      console.error('Global error:', e);
+      setStatus(`✗ Error: ${e.message}`, 'error');
+    });
+
+    // Uncaught errors
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('Unhandled rejection:', e.reason);
+      setStatus(`✗ Error: ${e.reason}`, 'error');
+    });
+
+    // Expression controls
+    const expressions = {
+      '1': 'aa', '2': 'ih', '3': 'ou', '4': 'ee', '5': 'oh',
+      'q': 'happy', 'w': 'sad', 'e': 'angry', 'r': 'surprised',
+      'a': 'blink', 's': 'lookLeft', 'd': 'lookRight', 'f': 'lookUp', 'g': 'lookDown',
+      'z': 'neutral', 'x': 'relaxed'
+    };
+
+    const expressionList = document.createElement('div');
+    expressionList.style.cssText = 'position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,0.8);padding:15px;border-radius:8px;font-size:12px;color:#888;max-width:300px;';
+    expressionList.innerHTML = '<strong>Keys:</strong><br>' +
+      '1-5: aa, ih, ou, ee, oh<br>' +
+      'q,w,e,r: happy, sad, angry, surprise<br>' +
+      'a,s,d,f,g: blink, left, right, up, down<br>' +
+      'z,x: neutral, relaxed';
+    document.body.appendChild(expressionList);
+
+    let activeExpressions = {};
+
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (expressions[key] && currentVRM?.expressionManager) {
+        const exprName = expressions[key];
+        currentVRM.expressionManager.setValue(exprName, 1.0);
+        setStatus(`Expression: ${exprName}`, 'success');
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (expressions[key] && currentVRM?.expressionManager) {
+        const exprName = expressions[key];
+        currentVRM.expressionManager.setValue(exprName, 0.0);
+      }
+    });
+
+    // TTS + Lip Sync
+    const ttsContainer = document.createElement('div');
+    ttsContainer.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:15px;border-radius:8px;z-index:100;';
+    ttsContainer.innerHTML = '<input id="tts-input" type="text" placeholder="Text zum Sprechen..." style="padding:8px;border-radius:4px;border:1px solid #333;background:#222;color:white;width:250px;"> <button id="tts-btn" style="padding:8px 16px;cursor:pointer;background:#4a4; border:none;border-radius:4px;color:white;">Sprechen</button>';
+    document.body.appendChild(ttsContainer);
+
+    // Lip sync animation
+    const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
+    let lipSyncInterval = null;
+
+    function animateMouth(shape, duration) {
+      if (!currentVRM?.expressionManager) return;
+      
+      // Set mouth shape
+      mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
+      currentVRM.expressionManager.setValue(shape, 1.0);
+      
+      // Reset after duration
+      setTimeout(() => {
+        if (currentVRM?.expressionManager) {
+          currentVRM.expressionManager.setValue(shape, 0);
+        }
+      }, duration);
+    }
+
+    function startLipSync(text) {
+      // Simple phoneme-based animation
+      const chars = text.toLowerCase().split('');
+      let i = 0;
+      
+      if (lipSyncInterval) clearInterval(lipSyncInterval);
+      
+      lipSyncInterval = setInterval(() => {
+        if (!currentVRM?.expressionManager || i >= chars.length) {
+          if (lipSyncInterval) clearInterval(lipSyncInterval);
+          return;
+        }
+        
+        const char = chars[i];
+        let shape = 'aa';
+        
+        // Map characters to mouth shapes
+        if ('aeiou'.includes(char)) shape = 'aa';
+        else if ('w'.includes(char)) shape = 'ou';
+        else if ('oy'.includes(char)) shape = 'oh';
+        else if ('ee'.includes(char)) shape = 'ee';
+        
+        animateMouth(shape, 100);
+        i++;
+      }, 150);
+    }
+
+    // Use Web Speech API
+    const synth = window.speechSynthesis;
+    const input = document.getElementById('tts-input');
+    const btn = document.getElementById('tts-btn');
+
+    btn.addEventListener('click', () => {
+      const text = input.value || 'Hallo, ich kann sprechen!';
+      
+      // Use German voice if available
+      const voices = synth.getVoices();
+      const germanVoice = voices.find(v => v.lang.startsWith('de')) || voices[0];
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (germanVoice) utterance.voice = germanVoice;
+      utterance.lang = 'de-DE';
+      utterance.rate = 0.9;
+      
+      utterance.onstart = () => startLipSync(text);
+      
+      synth.speak(utterance);
+    });
+
+    // Load voices
+    speechSynthesis.onvoiceschanged = () => {
+      console.log('Voices loaded:', speechSynthesis.getVoices().map(v => v.name));
+    };
+
+    // Audio polling from server
+    let lastAudioFile = '';
+    const audioContainer = document.createElement('div');
+    audioContainer.style.cssText = 'position:fixed;top:140px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;z-index:100;font-size:12px;color:#888;';
+    audioContainer.textContent = 'Polling für Audio...';
+    document.body.appendChild(audioContainer);
+
+    function playServerAudio() {
+      fetch('/audio/latest.json')
+        .then(r => r.json())
+        .then(data => {
+          if (data.file && data.file !== lastAudioFile) {
+            lastAudioFile = data.file;
+            const audioUrl = '/audio/' + data.file;
+            
+            audioContainer.textContent = '▶ Playing: ' + data.text;
+            
+            const audio = new Audio(audioUrl);
+            audio.play();
+            
+            // Start lip sync
+            startLipSync(data.text || 'hallo');
+            
+            audio.onended = () => {
+              audioContainer.textContent = '✓ Fertig';
+              // Reset lip sync
+              mouthShapes.forEach(s => currentVRM?.expressionManager?.setValue(s, 0));
+            };
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Poll every 2 seconds
+    setInterval(playServerAudio, 2000);
+  </script>
+</body>
+</html>
