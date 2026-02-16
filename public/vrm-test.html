@@ -47,12 +47,71 @@
       font-size: 12px;
       color: #888;
     }
+    #avatar-selector {
+      position: fixed;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      z-index: 100;
+    }
+    .avatar-thumb {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      border: 2px solid #444;
+      background: #222;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #888;
+      transition: all 0.2s;
+      overflow: hidden;
+    }
+    .avatar-thumb:hover {
+      border-color: #666;
+      transform: scale(1.05);
+    }
+    .avatar-thumb.active {
+      border-color: #4a4;
+      box-shadow: 0 0 10px rgba(68, 170, 68, 0.5);
+    }
+    .avatar-thumb.add-new {
+      border-style: dashed;
+      font-size: 24px;
+    }
+    #drop-zone {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #4a4;
+      z-index: 1000;
+      border: 4px dashed #4a4;
+    }
+    #drop-zone.active {
+      display: flex;
+    }
   </style>
 </head>
 <body>
   <div id="status">Initializing...</div>
   <div id="loading"></div>
   <div id="container"></div>
+  <div id="drop-zone">Drop VRM file here!</div>
+  <div id="avatar-selector"></div>
 
   <script type="importmap">
   {
@@ -84,7 +143,7 @@
 
     // Camera
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.5, 3);
+    camera.position.set(0, 1.6, 0.8);
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -171,7 +230,7 @@
           
           // Position and rotation
           vrm.scene.position.set(0, 0, 0);
-          vrm.scene.rotation.y = Math.PI;
+          vrm.scene.rotation.y = 0;
           
           console.log('VRM loaded successfully!', vrm);
           console.log('Expressions:', vrm.expressionManager?.expressionMap);
@@ -200,12 +259,21 @@
 
     // Animation loop
     const clock = new THREE.Clock();
+    let idleTime = 0;
     
     function animate() {
       requestAnimationFrame(animate);
       
       const delta = clock.getDelta();
       controls.update();
+      
+      // Idle animation - subtle breathing
+      if (currentVRM?.expressionManager) {
+        idleTime += delta;
+        // Every 3 seconds a subtle breath
+        const breath = Math.sin(idleTime * 2) * 0.15 + 0.15;
+        currentVRM.expressionManager.setValue('aa', Math.max(0, breath));
+      }
       
       // Update VRM if loaded
       if (currentVRM) {
@@ -271,56 +339,182 @@
       }
     });
 
+    // Avatar selector
+    const avatars = [
+      { name: 'Avatar', file: '/vrm/test.vrm' }
+    ];
+    let currentAvatar = 0;
+
+    function renderAvatarSelector() {
+      const container = document.getElementById('avatar-selector');
+      container.innerHTML = '';
+      
+      avatars.forEach((avatar, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'avatar-thumb' + (index === currentAvatar ? ' active' : '');
+        thumb.textContent = avatar.name;
+        thumb.onclick = () => loadAvatar(index);
+        container.appendChild(thumb);
+      });
+      
+      // Add new button
+      const addBtn = document.createElement('div');
+      addBtn.className = 'avatar-thumb add-new';
+      addBtn.textContent = '+';
+      addBtn.title = 'Drop VRM file here';
+      addBtn.ondragover = (e) => e.preventDefault();
+      addBtn.ondrop = handleDrop;
+      container.appendChild(addBtn);
+    }
+
+    function loadAvatar(index) {
+      if (index >= avatars.length) return;
+      currentAvatar = index;
+      const avatar = avatars[index];
+      
+      setStatus('Loading...', 'info');
+      loader.load(
+        avatar.file,
+        (gltf) => {
+          const vrm = gltf.userData.vrm;
+          if (vrm) {
+            if (currentVRM) {
+              scene.remove(currentVRM.scene);
+            }
+            currentVRM = vrm;
+            vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+            scene.add(vrm.scene);
+            vrm.scene.position.set(0, 0, 0);
+            vrm.scene.rotation.y = 0;
+            idleTime = 0;
+            setStatus('✓ Avatar geladen: ' + avatar.name, 'success');
+            renderAvatarSelector();
+          }
+        },
+        undefined,
+        (error) => {
+          setStatus('✗ Fehler: ' + error.message, 'error');
+        }
+      );
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith('.vrm')) {
+        // Upload to server
+        const formData = new FormData();
+        formData.append('vrm', file);
+        
+        setStatus('Uploading...', 'info');
+        
+        fetch('/upload-vrm', {
+          method: 'POST',
+          body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+          avatars.push({ name: file.name.replace('.vrm', ''), file: data.path });
+          loadAvatar(avatars.length - 1);
+        })
+        .catch(err => {
+          setStatus('✗ Upload failed', 'error');
+        });
+      }
+    }
+
+    // Drag and drop on whole page
+    document.body.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.add('active');
+    });
+    
+    document.body.addEventListener('dragleave', (e) => {
+      if (!e.relatedTarget) {
+        document.getElementById('drop-zone').classList.remove('active');
+      }
+    });
+    
+    document.body.addEventListener('drop', (e) => {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.remove('active');
+      handleDrop(e);
+    });
+
+    // Initial render
+    renderAvatarSelector();
+
     // TTS + Lip Sync
     const ttsContainer = document.createElement('div');
     ttsContainer.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:15px;border-radius:8px;z-index:100;';
     ttsContainer.innerHTML = '<input id="tts-input" type="text" placeholder="Text zum Sprechen..." style="padding:8px;border-radius:4px;border:1px solid #333;background:#222;color:white;width:250px;"> <button id="tts-btn" style="padding:8px 16px;cursor:pointer;background:#4a4; border:none;border-radius:4px;color:white;">Sprechen</button>';
     document.body.appendChild(ttsContainer);
 
-    // Lip sync animation
+    // Improved Lip sync animation
     const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
     let lipSyncInterval = null;
+    let isSpeaking = false;
 
-    function animateMouth(shape, duration) {
+    // Phoneme mapping for German
+    const phonemeMap = {
+      'a': 'aa', 'ä': 'aa', 'á': 'aa', 'à': 'aa',
+      'e': 'ih', 'é': 'ih', 'è': 'ih', 'ê': 'ih', 'ë': 'ih',
+      'i': 'ih', 'í': 'ih', 'ì': 'ih',
+      'o': 'oh', 'ó': 'oh', 'ò': 'oh', 'ô': 'oh',
+      'u': 'ou', 'ú': 'ou', 'ù': 'ou',
+      'y': 'ih',
+      'w': 'ou', 'v': 'ou',
+      'b': 'aa', 'd': 'ih', 'f': 'ih', 'g': 'aa', 'h': 'aa',
+      'j': 'ih', 'k': 'aa', 'l': 'ih', 'm': 'oh', 'n': 'ih',
+      'p': 'oh', 'r': 'ih', 's': 'ih', 't': 'ih', 'z': 'ih',
+      'th': 'aa', 'ch': 'ih', 'sch': 'ih', 'ng': 'ih'
+    };
+
+    function setMouth(shape, value = 1.0) {
       if (!currentVRM?.expressionManager) return;
-      
-      // Set mouth shape
       mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
-      currentVRM.expressionManager.setValue(shape, 1.0);
-      
-      // Reset after duration
-      setTimeout(() => {
-        if (currentVRM?.expressionManager) {
-          currentVRM.expressionManager.setValue(shape, 0);
-        }
-      }, duration);
+      if (shape) currentVRM.expressionManager.setValue(shape, value);
+    }
+
+    function resetMouth() {
+      isSpeaking = false;
+      setMouth(null, 0);
     }
 
     function startLipSync(text) {
-      // Simple phoneme-based animation
-      const chars = text.toLowerCase().split('');
-      let i = 0;
-      
       if (lipSyncInterval) clearInterval(lipSyncInterval);
       
+      // Clean text
+      const cleanText = text.toLowerCase().replace(/[^a-zäöüß]/g, '');
+      if (!cleanText.length) return;
+      
+      isSpeaking = true;
+      
+      // Estimate duration (average 3 syllables per second for German)
+      const duration = Math.max(500, (cleanText.length / 5) * 1000);
+      const interval = 80; // ~12 frames per second
+      const steps = Math.floor(duration / interval);
+      let step = 0;
+      
+      setMouth('aa', 0.3); // Start neutral-ish
+      
       lipSyncInterval = setInterval(() => {
-        if (!currentVRM?.expressionManager || i >= chars.length) {
-          if (lipSyncInterval) clearInterval(lipSyncInterval);
+        if (!isSpeaking || !currentVRM?.expressionManager || step >= steps) {
+          clearInterval(lipSyncInterval);
+          resetMouth();
           return;
         }
         
-        const char = chars[i];
-        let shape = 'aa';
+        // Pick mouth shape based on phoneme
+        const char = cleanText[Math.floor(Math.random() * cleanText.length)];
+        const shape = phonemeMap[char] || 'aa';
         
-        // Map characters to mouth shapes
-        if ('aeiou'.includes(char)) shape = 'aa';
-        else if ('w'.includes(char)) shape = 'ou';
-        else if ('oy'.includes(char)) shape = 'oh';
-        else if ('ee'.includes(char)) shape = 'ee';
+        // Vary the intensity for more natural look
+        const intensity = 0.5 + Math.random() * 0.5;
+        setMouth(shape, intensity);
         
-        animateMouth(shape, 100);
-        i++;
-      }, 150);
+        step++;
+      }, interval);
     }
 
     // Use Web Speech API
@@ -350,41 +544,117 @@
       console.log('Voices loaded:', speechSynthesis.getVoices().map(v => v.name));
     };
 
-    // Audio polling from server
-    let lastAudioFile = '';
-    const audioContainer = document.createElement('div');
-    audioContainer.style.cssText = 'position:fixed;top:140px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;z-index:100;font-size:12px;color:#888;';
-    audioContainer.textContent = 'Polling für Audio...';
-    document.body.appendChild(audioContainer);
+    // TTS Polling from server
+    let lastText = '';
+    const ttsStatus = document.createElement('div');
+    ttsStatus.style.cssText = 'position:fixed;top:140px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;z-index:100;font-size:12px;color:#888;';
+    ttsStatus.textContent = 'Warte auf TTS... (drück STRG+S zum Sagen)';
+    document.body.appendChild(ttsStatus);
 
-    function playServerAudio() {
+    function playAudioFile(text, filename) {
+      if (!filename || isSpeaking) return;
+      
+      isSpeaking = true;
+      ttsStatus.textContent = '🎤 Spiele: ' + text.substring(0, 30);
+      console.log('🎧 Playing:', filename);
+      
+      const audioUrl = '/audio/' + filename;
+      const audio = new Audio(audioUrl);
+      
+      // Start lip sync with the text
+      startLipSync(text);
+      
+      audio.onended = () => {
+        ttsStatus.textContent = '✓ Fertig';
+        resetMouth();
+        isSpeaking = false;
+        lastText = '';
+        // Clear the file after playing
+        fetch('/audio/latest.json', {
+          method: 'PUT',
+          body: JSON.stringify({ text: '', file: '' })
+        }).catch(() => {});
+      };
+      
+      audio.onerror = (e) => {
+        console.error('Audio Error:', e);
+        ttsStatus.textContent = '✗ Fehler beim Abspielen';
+        isSpeaking = false;
+        lastText = '';
+      };
+      
+      audio.play().catch(e => {
+        console.error('Play Error:', e);
+        isSpeaking = false;
+      });
+    }
+
+    function speakText(text) {
+      if (!text || text.trim() === '' || isSpeaking) return;
+      
+      isSpeaking = true;
+      ttsStatus.textContent = '🔄 Generiere TTS...';
+      console.log('🎤 Generating TTS for:', text);
+      
+      // Call TTS endpoint
+      fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          text: text,
+          voice: 'de-DE-ConradNeural'
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.file) {
+          playAudioFile(text, data.file);
+        } else {
+          throw new Error(data.error || 'TTS failed');
+        }
+      })
+      .catch(e => {
+        console.error('TTS Error:', e);
+        ttsStatus.textContent = '✗ TTS Fehler: ' + e.message;
+        isSpeaking = false;
+      });
+    }
+
+    function pollForTTS() {
+      if (isSpeaking) return; // Don't poll while speaking
+      
       fetch('/audio/latest.json')
         .then(r => r.json())
         .then(data => {
-          if (data.file && data.file !== lastAudioFile) {
-            lastAudioFile = data.file;
-            const audioUrl = '/audio/' + data.file;
-            
-            audioContainer.textContent = '▶ Playing: ' + data.text;
-            
-            const audio = new Audio(audioUrl);
-            audio.play();
-            
-            // Start lip sync
-            startLipSync(data.text || 'hallo');
-            
-            audio.onended = () => {
-              audioContainer.textContent = '✓ Fertig';
-              // Reset lip sync
-              mouthShapes.forEach(s => currentVRM?.expressionManager?.setValue(s, 0));
-            };
+          console.log('📥 Poll:', data);
+          if (data.text && data.text.trim() !== '' && data.text !== lastText && data.file) {
+            // Clear the file immediately to prevent re-triggering
+            fetch('/audio/latest.json', {
+              method: 'PUT',
+              body: JSON.stringify({ text: '', file: '' })
+            }).catch(() => {});
+            playAudioFile(data.text, data.file);
           }
         })
-        .catch(() => {});
+        .catch((e) => console.error('Poll error:', e));
     }
 
     // Poll every 2 seconds
-    setInterval(playServerAudio, 2000);
+    setInterval(pollForTTS, 2000);
+
+    // Manual trigger: STRG+S
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        const input = document.getElementById('tts-input');
+        if (input.value.trim()) {
+          speakText(input.value);
+        }
+      }
+    });
+
+    // Poll immediately on load
+    pollForTTS();
   </script>
 </body>
 </html>

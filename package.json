@@ -1,0 +1,24 @@
+{
+  "name": "hmi-face-rig",
+  "version": "1.0.0",
+  "description": "VRM-based 3D Avatar with: - Three.js + @pixiv/three-vrm - Face expression control via keyboard - TTS integration with lip-sync - Real-time audio polling from server",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moritzhckr/hmi-face-rig.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/moritzhckr/hmi-face-rig/issues"
+  },
+  "homepage": "https://github.com/moritzhckr/hmi-face-rig#readme",
+  "dependencies": {
+    "node-edge-tts": "^1.2.10"
+  }
+}
