@@ -1,10 +1,18 @@
 # HMI Face Rig
 
+> ⚠️ **Projekt wird in Notion verwaltet!** → [Notion Projekt](https://notion.so/30c8f154-9217-8118-831a-ded95d30cbc7)
+
 VRM-based 3D Avatar with:
 - Three.js + @pixiv/three-vrm
 - Face expression control via keyboard
 - TTS integration with lip-sync
 - Real-time audio polling from server
+
+## Tech Stack
+
+- Three.js
+- @pixiv/three-vrm v2.1.0
+- node-edge-tts (Edge TTS)
 
 ## Usage
 
@@ -32,8 +40,21 @@ node tts-speak.cjs "Hallo Welt"
 | q,w,e,r | happy, sad, angry, surprised |
 | a,s,d,f,g | blink, look left/right/up/down |
 
-## Tech Stack
+## Idle Animation (erweitert)
 
-- Three.js
-- @pixiv/three-vrm v2.1.0
-- gtts (Google TTS)
+- ✅ Atmende Mundbewegung
+- ✅ Blinken (zufällig alle 3-5 Sekunden)
+- ✅ Brust/Schulter-Atmung
+- ✅ Kopfbewegung (natürliches Nicken + Drehen)
+- ✅ Hüft-Gewichtsverlagerung
+
+## Notion Tasks (aktive Todos)
+
+- [ ] Projekt-Doku in Notion vervollständigen
+- [ ] TTS Integration debuggen (Lip-Sync)
+- [ ] Neue Face Expressions hinzufügen
+- [ ] Mobile Support (Touch-Controls)
+
+---
+
+*Zuletzt aktualisiert: 19.02.2026*

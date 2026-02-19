@@ -260,6 +260,10 @@
     // Animation loop
     const clock = new THREE.Clock();
     let idleTime = 0;
+    let lastBlinkTime = 0;
+    const blinkInterval = 3 + Math.random() * 2; // Random blink every 3-5 seconds
+    let isBlinking = false;
+    let blinkProgress = 0;
     
     function animate() {
       requestAnimationFrame(animate);
@@ -267,16 +271,69 @@
       const delta = clock.getDelta();
       controls.update();
       
-      // Idle animation - subtle breathing
-      if (currentVRM?.expressionManager) {
-        idleTime += delta;
-        // Every 3 seconds a subtle breath
-        const breath = Math.sin(idleTime * 2) * 0.15 + 0.15;
-        currentVRM.expressionManager.setValue('aa', Math.max(0, breath));
-      }
-      
-      // Update VRM if loaded
+      // Idle animation - full body breathing + blinking
       if (currentVRM) {
+        idleTime += delta;
+        
+        // === Facial Idle ===
+        if (currentVRM.expressionManager) {
+          // Breathing (mouth)
+          const breath = Math.sin(idleTime * 2) * 0.08 + 0.12;
+          currentVRM.expressionManager.setValue('aa', Math.max(0, breath));
+          
+          // Blinking
+          if (!isBlinking && idleTime - lastBlinkTime > blinkInterval) {
+            isBlinking = true;
+            blinkProgress = 0;
+          }
+          
+          if (isBlinking) {
+            blinkProgress += delta * 8; // Blink speed
+            const blinkValue = Math.sin(blinkProgress * Math.PI);
+            currentVRM.expressionManager.setValue('blink', blinkValue);
+            
+            if (blinkProgress >= 1) {
+              isBlinking = false;
+              lastBlinkTime = idleTime;
+              currentVRM.expressionManager.setValue('blink', 0);
+            }
+          }
+        }
+        
+        // === Body Idle ===
+        if (currentVRM.humanoid) {
+          const bodyBreath = Math.sin(idleTime * 2) * 0.02;
+          const sideBreath = Math.sin(idleTime * 1.5) * 0.01;
+          const weightShift = Math.sin(idleTime * 0.5) * 0.01;
+          
+          // Spine/chest sway
+          if (currentVRM.humanoid.getRawBoneNode('chest')) {
+            currentVRM.humanoid.getRawBoneNode('chest').rotation.x = bodyBreath;
+          }
+          if (currentVRM.humanoid.getRawBoneNode('spine')) {
+            currentVRM.humanoid.getRawBoneNode('spine').rotation.x = bodyBreath * 0.5;
+          }
+          
+          // Head movement
+          if (currentVRM.humanoid.getRawBoneNode('head')) {
+            currentVRM.humanoid.getRawBoneNode('head').rotation.x = Math.sin(idleTime * 2) * 0.015 + Math.sin(idleTime * 5) * 0.003;
+            currentVRM.humanoid.getRawBoneNode('head').rotation.y = Math.sin(idleTime * 0.8) * 0.02;
+          }
+          
+          // Shoulder breathing
+          if (currentVRM.humanoid.getRawBoneNode('leftShoulder')) {
+            currentVRM.humanoid.getRawBoneNode('leftShoulder').rotation.z = sideBreath;
+          }
+          if (currentVRM.humanoid.getRawBoneNode('rightShoulder')) {
+            currentVRM.humanoid.getRawBoneNode('rightShoulder').rotation.z = -sideBreath;
+          }
+          
+          // Subtle hip/root weight shifting
+          if (currentVRM.humanoid.getRawBoneNode('hips')) {
+            currentVRM.humanoid.getRawBoneNode('hips').rotation.y = weightShift;
+          }
+        }
+        
         currentVRM.update(delta);
       }
       
