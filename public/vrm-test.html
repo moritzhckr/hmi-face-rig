@@ -232,6 +232,20 @@
           vrm.scene.position.set(0, 0, 0);
           vrm.scene.rotation.y = 0;
           
+          // Fix T-pose: Rotate arms down to natural position
+          if (vrm.humanoid) {
+            const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
+            const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
+            const rightForearm = vrm.humanoid.getRawBoneNode('rightLowerArm');
+            const leftForearm = vrm.humanoid.getRawBoneNode('leftLowerArm');
+            
+            // Arms down at sides (natural standing)
+            if (rightArm) rightArm.rotation.z = Math.PI / 2 - 0.3; // ~150 degrees
+            if (leftArm) leftArm.rotation.z = -(Math.PI / 2 - 0.3);
+            if (rightForearm) rightForearm.rotation.z = 0.2;
+            if (leftForearm) leftForearm.rotation.z = -0.2;
+          }
+          
           console.log('VRM loaded successfully!', vrm);
           console.log('Expressions:', vrm.expressionManager?.expressionMap);
           
@@ -320,12 +334,33 @@
             currentVRM.humanoid.getRawBoneNode('head').rotation.y = Math.sin(idleTime * 0.8) * 0.02;
           }
           
-          // Shoulder breathing
+          // Shoulder breathing + arm sway
           if (currentVRM.humanoid.getRawBoneNode('leftShoulder')) {
             currentVRM.humanoid.getRawBoneNode('leftShoulder').rotation.z = sideBreath;
           }
           if (currentVRM.humanoid.getRawBoneNode('rightShoulder')) {
             currentVRM.humanoid.getRawBoneNode('rightShoulder').rotation.z = -sideBreath;
+          }
+          
+          // Arm sway (subtle pendulum movement)
+          const armSway = Math.sin(idleTime * 1.2) * 0.02;
+          const leftUpperArm = currentVRM.humanoid.getRawBoneNode('leftUpperArm');
+          const rightUpperArm = currentVRM.humanoid.getRawBoneNode('rightUpperArm');
+          const leftLowerArm = currentVRM.humanoid.getRawBoneNode('leftLowerArm');
+          const rightLowerArm = currentVRM.humanoid.getRawBoneNode('rightLowerArm');
+          
+          if (leftUpperArm) {
+            // Keep base arm position + subtle sway
+            leftUpperArm.rotation.z = -(Math.PI / 2 - 0.3) + armSway;
+          }
+          if (rightUpperArm) {
+            rightUpperArm.rotation.z = (Math.PI / 2 - 0.3) - armSway;
+          }
+          if (leftLowerArm) {
+            leftLowerArm.rotation.z = -0.2 + armSway * 0.5;
+          }
+          if (rightLowerArm) {
+            rightLowerArm.rotation.z = 0.2 - armSway * 0.5;
           }
           
           // Subtle hip/root weight shifting
@@ -444,6 +479,19 @@
             vrm.scene.position.set(0, 0, 0);
             vrm.scene.rotation.y = 0;
             idleTime = 0;
+            
+            // Fix T-pose: Arms down
+            if (vrm.humanoid) {
+              const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
+              const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
+              const rightForearm = vrm.humanoid.getRawBoneNode('rightLowerArm');
+              const leftForearm = vrm.humanoid.getRawBoneNode('leftLowerArm');
+              if (rightArm) rightArm.rotation.z = Math.PI / 2 - 0.3;
+              if (leftArm) leftArm.rotation.z = -(Math.PI / 2 - 0.3);
+              if (rightForearm) rightForearm.rotation.z = 0.2;
+              if (leftForearm) leftForearm.rotation.z = -0.2;
+            }
+            
             setStatus('✓ Avatar geladen: ' + avatar.name, 'success');
             renderAvatarSelector();
           }

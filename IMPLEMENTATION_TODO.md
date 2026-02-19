@@ -16,7 +16,7 @@
 4. Ensure all animations work properly
 
 ## Steps
-- [ ] 1. Enhance facial idle (add blink, eye movement)
-- [ ] 2. Enhance body breathing
-- [ ] 3. Add weight shifting
-- [ ] 4. Test and commit
+- [x] 1. Enhance facial idle (add blink, eye movement)
+- [x] 2. Enhance body breathing
+- [x] 3. Add weight shifting
+- [x] 4. Test and commit

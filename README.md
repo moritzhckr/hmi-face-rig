@@ -47,6 +47,8 @@ node tts-speak.cjs "Hallo Welt"
 - ✅ Brust/Schulter-Atmung
 - ✅ Kopfbewegung (natürliches Nicken + Drehen)
 - ✅ Hüft-Gewichtsverlagerung
+- ✅ **Arme in natürlicher Position** (T-Pose → Steh-Pose)
+- ✅ **Arm-Schwung** (subtil im Idle)
 
 ## Notion Tasks (aktive Todos)
 
