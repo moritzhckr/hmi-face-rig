@@ -12,113 +12,130 @@
       color: white;
       overflow: hidden;
     }
-    #container { 
-      width: 100vw; 
-      height: 100vh;
-    }
+    #container { width: 100vw; height: 100vh; }
     #status {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 14px;
-      z-index: 100;
-      border: 1px solid #333;
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); padding: 12px 24px; border-radius: 8px;
+      font-size: 14px; z-index: 100; border: 1px solid #333;
     }
-    #status.error {
-      border-color: #ff4444;
-      color: #ff6666;
-    }
-    #status.success {
-      border-color: #44ff44;
-      color: #66ff66;
-    }
+    #status.error { border-color: #ff4444; color: #ff6666; }
+    #status.success { border-color: #44ff44; color: #66ff66; }
     #loading {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 8px 16px;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #888;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 4px;
+      font-size: 12px; color: #888;
     }
-    #avatar-selector {
-      position: fixed;
-      bottom: 20px;
-      left: 0;
-      right: 0;
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px;
-      background: linear-gradient(transparent, rgba(0,0,0,0.8));
-      z-index: 100;
+    
+    /* Side Menu */
+    #menu-toggle {
+      position: fixed; top: 20px; right: 20px; z-index: 200;
+      width: 50px; height: 50px; background: rgba(0,0,0,0.8);
+      border: 2px solid #444; border-radius: 50%; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px;
     }
-    .avatar-thumb {
-      width: 60px;
-      height: 60px;
-      border-radius: 8px;
-      border: 2px solid #444;
-      background: #222;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: #888;
-      transition: all 0.2s;
-      overflow: hidden;
+    #menu-toggle span { width: 24px; height: 3px; background: #fff; border-radius: 2px; }
+    
+    #side-menu {
+      position: fixed; top: 0; right: -300px; width: 280px; height: 100vh;
+      background: linear-gradient(180deg, rgba(20,20,30,0.95) 0%, rgba(10,10,20,0.98) 100%);
+      z-index: 150; padding: 80px 20px 20px; overflow-y: auto;
+      transition: right 0.3s ease; border-left: 1px solid #333;
     }
-    .avatar-thumb:hover {
-      border-color: #666;
-      transform: scale(1.05);
+    #side-menu.open { right: 0; }
+    
+    .menu-section { margin-bottom: 24px; }
+    .menu-section h3 {
+      font-size: 12px; text-transform: uppercase; color: #888;
+      margin-bottom: 12px; letter-spacing: 1px;
     }
-    .avatar-thumb.active {
-      border-color: #4a4;
-      box-shadow: 0 0 10px rgba(68, 170, 68, 0.5);
+    .menu-btn {
+      width: 100%; padding: 12px 16px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.05); border: 1px solid #333;
+      border-radius: 8px; color: white; cursor: pointer;
+      font-size: 14px; text-align: left; transition: all 0.2s;
     }
-    .avatar-thumb.add-new {
-      border-style: dashed;
-      font-size: 24px;
+    .menu-btn:hover { background: rgba(255,255,255,0.1); border-color: #555; }
+    .menu-btn.active { background: rgba(68,170,68,0.2); border-color: #4a4; color: #4f4; }
+    
+    /* Face controls */
+    .face-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .face-btn {
+      padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333;
+      border-radius: 6px; color: #aaa; font-size: 11px; cursor: pointer; text-align: center;
     }
-    #drop-zone {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.9);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      color: #4a4;
-      z-index: 1000;
-      border: 4px dashed #4a4;
-    }
-    #drop-zone.active {
-      display: flex;
-    }
+    .face-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+    .face-btn:active { background: rgba(68,170,68,0.3); }
   </style>
 </head>
 <body>
   <div id="status">Initializing...</div>
   <div id="loading"></div>
   <div id="container"></div>
-  <div id="drop-zone">Drop VRM file here!</div>
-  <div id="avatar-selector"></div>
+  
+  <!-- Menu Toggle -->
+  <div id="menu-toggle" onclick="document.getElementById('side-menu').classList.toggle('open')">
+    <span></span><span></span><span></span>
+  </div>
+  
+  <!-- Side Menu -->
+  <div id="side-menu">
+    <div class="menu-section">
+      <h3>Body Animation</h3>
+      <button class="menu-btn active" id="btn-idle" onclick="setAnimation('idle')">🧍 Idle</button>
+      <button class="menu-btn" id="btn-anim1" onclick="setAnimation('anim1')">1: walk_forward</button>
+      <button class="menu-btn" id="btn-anim2" onclick="setAnimation('anim2')">2: walk_backward</button>
+      <button class="menu-btn" id="btn-anim3" onclick="setAnimation('anim3')">3</button>
+      <button class="menu-btn" id="btn-anim4" onclick="setAnimation('anim4')">4</button>
+      <button class="menu-btn" id="btn-anim5" onclick="setAnimation('anim5')">5</button>
+      <button class="menu-btn" id="btn-anim6" onclick="setAnimation('anim6')">6</button>
+      <button class="menu-btn" id="btn-anim7" onclick="setAnimation('anim7')">7</button>
+      <button class="menu-btn" id="btn-anim8" onclick="setAnimation('anim8')">8</button>
+      <button class="menu-btn" id="btn-anim9" onclick="setAnimation('anim9')">9</button>
+      <button class="menu-btn" id="btn-anim10" onclick="setAnimation('anim10')">10</button>
+    </div>
+    
+    <div class="menu-section">
+      <h3>Facial Expressions</h3>
+      <div class="face-grid">
+        <button class="face-btn" onmousedown="setFace('aa')" onmouseup="setFace('aa',0)" ontouchstart="event.preventDefault();setFace('aa')" ontouchend="event.preventDefault();setFace('aa',0)">Aa</button>
+        <button class="face-btn" onmousedown="setFace('ih')" onmouseup="setFace('ih',0)" ontouchstart="event.preventDefault();setFace('ih')" ontouchend="event.preventDefault();setFace('ih',0)">Ih</button>
+        <button class="face-btn" onmousedown="setFace('ou')" onmouseup="setFace('ou',0)" ontouchstart="event.preventDefault();setFace('ou')" ontouchend="event.preventDefault();setFace('ou',0)">Ou</button>
+        <button class="face-btn" onmousedown="setFace('ee')" onmouseup="setFace('ee',0)" ontouchstart="event.preventDefault();setFace('ee')" ontouchend="event.preventDefault();setFace('ee',0)">Ee</button>
+        <button class="face-btn" onmousedown="setFace('oh')" onmouseup="setFace('oh',0)" ontouchstart="event.preventDefault();setFace('oh')" ontouchend="event.preventDefault();setFace('oh',0)">Oh</button>
+        <button class="face-btn" onmousedown="setFace('blink')" onmouseup="setFace('blink',0)" ontouchstart="event.preventDefault();setFace('blink')" ontouchend="event.preventDefault();setFace('blink',0)">Blink</button>
+        <button class="face-btn" onmousedown="setFace('happy')" onmouseup="setFace('happy',0)" ontouchstart="event.preventDefault();setFace('happy')" ontouchend="event.preventDefault();setFace('happy',0)">😊</button>
+        <button class="face-btn" onmousedown="setFace('sad')" onmouseup="setFace('sad',0)" ontouchstart="event.preventDefault();setFace('sad')" ontouchend="event.preventDefault();setFace('sad',0)">😢</button>
+        <button class="face-btn" onmousedown="setFace('angry')" onmouseup="setFace('angry',0)" ontouchstart="event.preventDefault();setFace('angry')" ontouchend="event.preventDefault();setFace('angry',0)">😠</button>
+      </div>
+    </div>
+    
+    <div class="menu-section">
+      <h3>Info</h3>
+      <div style="font-size:11px;color:#666;">
+        Drück <b>D</b> für Debug<br>
+        Drag & Drop für neue VRM
+      </div>
+    </div>
+    
+    <div class="menu-section">
+      <h3>Debug</h3>
+      <button class="menu-btn" id="btn-stats" onclick="toggleStats()">📊 FPS Stats</button>
+      <button class="menu-btn" id="btn-rig" onclick="toggleRig()">🦴 Debug Rig</button>
+      <button class="menu-btn" id="btn-webcam" onclick="toggleWebcam()">📷 Webcam</button>
+    </div>
+  </div>
+  
+  <video id="webcam" autoplay playsinline style="position:fixed;bottom:20px;left:20px;width:160px;height:120px;border:2px solid #444;border-radius:8px;display:none;z-index:100;transform:scaleX(-1);"></video>
 
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.js",
+      "stats": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/libs/stats.module.js",
+      "fbxloader": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/FBXLoader.js"
     }
   }
   </script>
@@ -127,7 +144,10 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+    import { retargetAnimation } from './lib/index.esm.js';
+    import Stats from 'three/addons/libs/stats.module.js';
 
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
@@ -150,616 +170,373 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
     document.getElementById('container').appendChild(renderer.domElement);
 
     // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 1, 0);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
     controls.update();
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
-
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1);
     sunLight.position.set(5, 10, 5);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 0.1;
-    sunLight.shadow.camera.far = 50;
-    sunLight.shadow.camera.left = -10;
-    sunLight.shadow.camera.right = 10;
-    sunLight.shadow.camera.top = 10;
-    sunLight.shadow.camera.bottom = -10;
     scene.add(sunLight);
 
-    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fillLight.position.set(-5, 2, -5);
-    scene.add(fillLight);
-
-    const rimLight = new THREE.DirectionalLight(0xff8888, 0.2);
-    rimLight.position.set(0, 2, -5);
-    scene.add(rimLight);
-
     // Floor
-    const floorGeometry = new THREE.PlaneGeometry(20, 20);
-    const floorMaterial = new THREE.MeshStandardMaterial({ 
-      color: 0x222233,
-      roughness: 0.8,
-      metalness: 0.2
-    });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 20),
+      new THREE.MeshStandardMaterial({ color: 0x222233, roughness: 0.8 })
+    );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
+    scene.add(new THREE.GridHelper(20, 40, 0x444466, 0x333344));
 
-    // Grid helper
-    const gridHelper = new THREE.GridHelper(20, 40, 0x444466, 0x333344);
-    gridHelper.position.y = 0.01;
-    scene.add(gridHelper);
-
+    // VRM state
     let currentVRM = null;
+    let mixer = null;
+    let action = null;
+    let currentAnimation = 'idle';
+    let currentAnimationClip = null;
+    let animationTime = 0;
+    let idleClip = null;
+    let walkClip = null;
+    let walkBackClip = null;
+    
+    // Animation clips storage
+    const animations = {};
+
+    // Helper root for VRM debugging
+    const helperRoot = new THREE.Group();
+    helperRoot.renderOrder = 10000;
+    scene.add(helperRoot);
+
+    // FBX Loader for Idle animation
+    const fbxLoader = new FBXLoader();
+    
+    // Load Idle FBX using vrm-mixamo-retarget library
+    async function loadIdleFBX(vrm) {
+      console.log('=== Loading Idle.fbx with vrm-mixamo-retarget ===');
+      try {
+        const fbx = await new Promise((resolve, reject) => {
+          fbxLoader.load('/animations/Idle.fbx', resolve, undefined, reject);
+        });
+        
+        console.log('FBX loaded');
+        
+        // Use the library to retarget
+        const clip = retargetAnimation(fbx, vrm);
+        
+        if (clip) {
+          clip.name = 'idle';
+          animations['idle'] = clip;
+          console.log('✅ Idle FBX converted with vrm-mixamo-retarget! Duration:', clip.duration);
+          console.log('Sample tracks:', clip.tracks.slice(0, 3).map(t => t.name));
+          return clip;
+        } else {
+          console.log('❌ retargetAnimation returned null');
+        }
+      } catch (e) {
+        console.error('❌ Error loading Idle.fbx:', e);
+      }
+      return null;
+    }
+
+    // Stats
+    const stats = new Stats();
+    stats.dom.style.cssText = 'position:fixed;top:80px;left:20px;z-index:200';
+    document.body.appendChild(stats.dom);
+    stats.dom.style.display = 'none';
+    
+    let statsEnabled = false;
+    let rigEnabled = false;
+    let webcamEnabled = false;
+    
+    function toggleStats() {
+      statsEnabled = !statsEnabled;
+      stats.dom.style.display = statsEnabled ? 'block' : 'none';
+      document.getElementById('btn-stats').classList.toggle('active', statsEnabled);
+    }
+    
+    function toggleRig() {
+      rigEnabled = !rigEnabled;
+      helperRoot.visible = rigEnabled;
+      document.getElementById('btn-rig').classList.toggle('active', rigEnabled);
+    }
+    
+    async function toggleWebcam() {
+      webcamEnabled = !webcamEnabled;
+      const video = document.getElementById('webcam');
+      const btn = document.getElementById('btn-webcam');
+      
+      if (webcamEnabled) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+          video.srcObject = stream;
+          video.style.display = 'block';
+          btn.classList.add('active');
+        } catch (e) {
+          console.error('Webcam error:', e);
+          webcamEnabled = false;
+        }
+      } else {
+        const stream = video.srcObject;
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+        video.style.display = 'none';
+        btn.classList.remove('active');
+      }
+    }
+    
+    window.toggleStats = toggleStats;
+    window.toggleRig = toggleRig;
+    window.toggleWebcam = toggleWebcam;
 
     // Load VRM
-    setStatus('Loading VRM model...', 'info');
-    loadingEl.textContent = 'Downloading model...';
-
+    setStatus('Loading VRM...', 'info');
+    
     const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loader.crossOrigin = 'anonymous';
+    
+    // IMPORTANT: Register VRMLoaderPlugin with autoUpdateHumanBones
+    loader.register((parser) => {
+      return new VRMLoaderPlugin(parser, { 
+        helperRoot: helperRoot, 
+        autoUpdateHumanBones: true 
+      });
+    });
 
     loader.load(
       '/vrm/test.vrm',
       (gltf) => {
         const vrm = gltf.userData.vrm;
-        
-        if (vrm) {
-          currentVRM = vrm;
-          
-          // Disable frustum culling
-          vrm.scene.traverse((obj) => {
-            obj.frustumCulled = false;
-          });
-          
-          scene.add(vrm.scene);
-          
-          // Position and rotation
-          vrm.scene.position.set(0, 0, 0);
-          vrm.scene.rotation.y = 0;
-          
-          // Fix T-pose: Rotate arms down to natural position
-          if (vrm.humanoid) {
-            const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
-            const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
-            const rightForearm = vrm.humanoid.getRawBoneNode('rightLowerArm');
-            const leftForearm = vrm.humanoid.getRawBoneNode('leftLowerArm');
-            
-            // Arms down at sides (natural standing)
-            if (rightArm) rightArm.rotation.z = Math.PI / 2 - 0.3; // ~150 degrees
-            if (leftArm) leftArm.rotation.z = -(Math.PI / 2 - 0.3);
-            if (rightForearm) rightForearm.rotation.z = 0.2;
-            if (leftForearm) leftForearm.rotation.z = -0.2;
-          }
-          
-          console.log('VRM loaded successfully!', vrm);
-          console.log('Expressions:', vrm.expressionManager?.expressionMap);
-          
-          setStatus('✓ VRM Loaded - press keys for expressions', 'success');
-          
-        } else {
-          setStatus('✗ No VRM found in model file', 'error');
-          loadingEl.textContent = '';
+        if (!vrm) {
+          setStatus('✗ No VRM found', 'error');
+          return;
         }
+
+        // Optimize VRM
+        VRMUtils.removeUnnecessaryVertices(gltf.scene);
+        VRMUtils.combineSkeletons(gltf.scene);
+        VRMUtils.combineMorphs(vrm);
+
+        // Remove old VRM
+        if (currentVRM) {
+          scene.remove(currentVRM.scene);
+          VRMUtils.deepDispose(currentVRM.scene);
+        }
+
+        currentVRM = vrm;
+        scene.add(vrm.scene);
+
+        // Disable frustum culling
+        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+        // Create AnimationMixer
+        mixer = new THREE.AnimationMixer(vrm.scene);
+        
+        // Debug: log bones in scene
+        const sceneBones = [];
+        vrm.scene.traverse((obj) => {
+          if (obj.isBone) sceneBones.push(obj.name);
+        });
+        console.log('Scene bones:', sceneBones.slice(0, 20));
+
+        // IMPORTANT: Rotate VRM0
+        VRMUtils.rotateVRM0(vrm);
+
+        console.log('VRM loaded:', vrm);
+
+        // Load all animations
+        const animFiles = {
+          'anim1': '/animations/walk_forward.glb',
+          'anim2': '/animations/walk_backward.glb',
+          'anim3': '/animations/anim_797a510d-5b5c-4082-b.glb',
+          'anim4': '/animations/anim_8edb8d05-9cba-46f8-8.glb',
+          'anim5': '/animations/anim_4d0b10e5-38f7-4443-b.glb',
+          'anim6': '/animations/anim_eb33bde4-2c28-46a4-a.glb',
+          'anim7': '/animations/anim_a0f35981-ff7f-43be-b.glb',
+          'anim8': '/animations/anim_83f8caf7-4b85-4f60-8.glb',
+          'anim9': '/animations/anim_ce18f5d2-1d7f-470b-8.glb',
+          'anim10': '/animations/anim_1b49202d-72dc-4b82-9.glb'
+        };
+        
+        const loadPromises = Object.entries(animFiles).map(([name, url]) => {
+          return loadMixamoAnimation(url, vrm).then(clip => {
+            if (clip) {
+              animations[name] = clip;
+              console.log('Loaded:', name);
+            }
+          }).catch(e => console.error('Error loading', name, e));
+        });
+        
+        Promise.all(loadPromises).then(() => {
+          // Load Idle FBX
+          return loadIdleFBX(vrm);
+        }).then(() => {
+          console.log('All animations loaded!');
+          loadingEl.textContent = '';  // Hide loading
+          setAnimation('anim10'); // Default animation
+          setStatus('✓ Alles geladen!', 'success');
+        });
       },
       (progress) => {
         if (progress.total > 0) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          loadingEl.textContent = `Loading... ${percent}%`;
-        } else {
-          loadingEl.textContent = 'Loading...';
+          loadingEl.textContent = `Loading... ${Math.round(progress.loaded / progress.total * 100)}%`;
         }
       },
       (error) => {
-        console.error('Error loading VRM:', error);
+        console.error(error);
         setStatus(`✗ Error: ${error.message}`, 'error');
-        loadingEl.textContent = '';
       }
     );
 
     // Animation loop
     const clock = new THREE.Clock();
     let idleTime = 0;
-    let lastBlinkTime = 0;
-    const blinkInterval = 3 + Math.random() * 2; // Random blink every 3-5 seconds
-    let isBlinking = false;
-    let blinkProgress = 0;
-    
+
+    // Manual animation update function
+    function updateManualAnimation(delta) {
+      if (!currentAnimationClip || !currentVRM?.humanoid) return;
+      
+      animationTime += delta;
+      const duration = currentAnimationClip.duration;
+      const time = animationTime % duration;
+      
+      // Apply each track to the corresponding bone
+      for (const track of currentAnimationClip.tracks) {
+        const trackName = track.name;
+        const dotIndex = trackName.lastIndexOf('.');
+        if (dotIndex === -1) continue;
+        
+        const boneName = trackName.substring(0, dotIndex);
+        const propertyName = trackName.substring(dotIndex + 1);
+        
+        // Get the VRM bone
+        let boneNode = currentVRM.humanoid.getNormalizedBoneNode(boneName.replace('Normalized_', ''));
+        if (!boneNode) continue;
+        
+        // Get the value at current time
+        if (track instanceof THREE.QuaternionKeyframeTrack) {
+          const value = track.evaluate(time);
+          boneNode.quaternion.set(value[0], value[1], value[2], value[3]);
+        } else if (track instanceof THREE.VectorKeyframeTrack && propertyName === 'position') {
+          const value = track.evaluate(time);
+          boneNode.position.set(value[0], value[1], value[2]);
+        }
+      }
+    }
+
     function animate() {
       requestAnimationFrame(animate);
       
       const delta = clock.getDelta();
       controls.update();
+      stats.update();
       
-      // Idle animation - full body breathing + blinking
-      if (currentVRM) {
+      // Update animation
+      if (mixer) mixer.update(delta);
+      
+      // Debug: rotate head if animation not working
+      if (currentVRM?.humanoid) {
+        const head = currentVRM.humanoid.getRawBoneNode('head');
+        if (head && Math.random() < 0.01) {
+          console.log('Head bone found:', head.name);
+        }
+      }
+      
+      // Update VRM
+      if (currentVRM) currentVRM.update(delta);
+      
+      // Facial idle (breathing + blinking)
+      if (currentVRM?.expressionManager) {
         idleTime += delta;
         
-        // === Facial Idle ===
-        if (currentVRM.expressionManager) {
-          // Breathing (mouth)
-          const breath = Math.sin(idleTime * 2) * 0.08 + 0.12;
-          currentVRM.expressionManager.setValue('aa', Math.max(0, breath));
-          
-          // Blinking
-          if (!isBlinking && idleTime - lastBlinkTime > blinkInterval) {
-            isBlinking = true;
-            blinkProgress = 0;
-          }
-          
-          if (isBlinking) {
-            blinkProgress += delta * 8; // Blink speed
-            const blinkValue = Math.sin(blinkProgress * Math.PI);
-            currentVRM.expressionManager.setValue('blink', blinkValue);
-            
-            if (blinkProgress >= 1) {
-              isBlinking = false;
-              lastBlinkTime = idleTime;
-              currentVRM.expressionManager.setValue('blink', 0);
-            }
-          }
-        }
+        // Breathing
+        currentVRM.expressionManager.setValue('aa', Math.max(0, Math.sin(idleTime * 2) * 0.08 + 0.12));
         
-        // === Body Idle ===
-        if (currentVRM.humanoid) {
-          const bodyBreath = Math.sin(idleTime * 2) * 0.02;
-          const sideBreath = Math.sin(idleTime * 1.5) * 0.01;
-          const weightShift = Math.sin(idleTime * 0.5) * 0.01;
-          
-          // Spine/chest sway
-          if (currentVRM.humanoid.getRawBoneNode('chest')) {
-            currentVRM.humanoid.getRawBoneNode('chest').rotation.x = bodyBreath;
-          }
-          if (currentVRM.humanoid.getRawBoneNode('spine')) {
-            currentVRM.humanoid.getRawBoneNode('spine').rotation.x = bodyBreath * 0.5;
-          }
-          
-          // Head movement
-          if (currentVRM.humanoid.getRawBoneNode('head')) {
-            currentVRM.humanoid.getRawBoneNode('head').rotation.x = Math.sin(idleTime * 2) * 0.015 + Math.sin(idleTime * 5) * 0.003;
-            currentVRM.humanoid.getRawBoneNode('head').rotation.y = Math.sin(idleTime * 0.8) * 0.02;
-          }
-          
-          // Shoulder breathing + arm sway
-          if (currentVRM.humanoid.getRawBoneNode('leftShoulder')) {
-            currentVRM.humanoid.getRawBoneNode('leftShoulder').rotation.z = sideBreath;
-          }
-          if (currentVRM.humanoid.getRawBoneNode('rightShoulder')) {
-            currentVRM.humanoid.getRawBoneNode('rightShoulder').rotation.z = -sideBreath;
-          }
-          
-          // Arm sway (subtle pendulum movement)
-          const armSway = Math.sin(idleTime * 1.2) * 0.02;
-          const leftUpperArm = currentVRM.humanoid.getRawBoneNode('leftUpperArm');
-          const rightUpperArm = currentVRM.humanoid.getRawBoneNode('rightUpperArm');
-          const leftLowerArm = currentVRM.humanoid.getRawBoneNode('leftLowerArm');
-          const rightLowerArm = currentVRM.humanoid.getRawBoneNode('rightLowerArm');
-          
-          if (leftUpperArm) {
-            // Keep base arm position + subtle sway
-            leftUpperArm.rotation.z = -(Math.PI / 2 - 0.3) + armSway;
-          }
-          if (rightUpperArm) {
-            rightUpperArm.rotation.z = (Math.PI / 2 - 0.3) - armSway;
-          }
-          if (leftLowerArm) {
-            leftLowerArm.rotation.z = -0.2 + armSway * 0.5;
-          }
-          if (rightLowerArm) {
-            rightLowerArm.rotation.z = 0.2 - armSway * 0.5;
-          }
-          
-          // Subtle hip/root weight shifting
-          if (currentVRM.humanoid.getRawBoneNode('hips')) {
-            currentVRM.humanoid.getRawBoneNode('hips').rotation.y = weightShift;
-          }
+        // Random blink every 3-5 seconds
+        if (Math.random() < 0.002) {
+          currentVRM.expressionManager.setValue('blink', 1);
+          setTimeout(() => {
+            if (currentVRM?.expressionManager) currentVRM.expressionManager.setValue('blink', 0);
+          }, 150);
         }
-        
-        currentVRM.update(delta);
       }
       
       renderer.render(scene, camera);
     }
     animate();
 
-    // Handle resize
+    // Resize handler
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // Handle errors
-    window.addEventListener('error', (e) => {
-      console.error('Global error:', e);
-      setStatus(`✗ Error: ${e.message}`, 'error');
-    });
-
-    // Uncaught errors
-    window.addEventListener('unhandledrejection', (e) => {
-      console.error('Unhandled rejection:', e.reason);
-      setStatus(`✗ Error: ${e.reason}`, 'error');
-    });
-
-    // Expression controls
-    const expressions = {
-      '1': 'aa', '2': 'ih', '3': 'ou', '4': 'ee', '5': 'oh',
-      'q': 'happy', 'w': 'sad', 'e': 'angry', 'r': 'surprised',
-      'a': 'blink', 's': 'lookLeft', 'd': 'lookRight', 'f': 'lookUp', 'g': 'lookDown',
-      'z': 'neutral', 'x': 'relaxed'
-    };
-
-    const expressionList = document.createElement('div');
-    expressionList.style.cssText = 'position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,0.8);padding:15px;border-radius:8px;font-size:12px;color:#888;max-width:300px;';
-    expressionList.innerHTML = '<strong>Keys:</strong><br>' +
-      '1-5: aa, ih, ou, ee, oh<br>' +
-      'q,w,e,r: happy, sad, angry, surprise<br>' +
-      'a,s,d,f,g: blink, left, right, up, down<br>' +
-      'z,x: neutral, relaxed';
-    document.body.appendChild(expressionList);
-
-    let activeExpressions = {};
-
+    // Debug toggle with 'd' key
+    let debugMode = true;
     window.addEventListener('keydown', (e) => {
-      const key = e.key.toLowerCase();
-      if (expressions[key] && currentVRM?.expressionManager) {
-        const exprName = expressions[key];
-        currentVRM.expressionManager.setValue(exprName, 1.0);
-        setStatus(`Expression: ${exprName}`, 'success');
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      const key = e.key.toLowerCase();
-      if (expressions[key] && currentVRM?.expressionManager) {
-        const exprName = expressions[key];
-        currentVRM.expressionManager.setValue(exprName, 0.0);
-      }
-    });
-
-    // Avatar selector
-    const avatars = [
-      { name: 'Avatar', file: '/vrm/test.vrm' }
-    ];
-    let currentAvatar = 0;
-
-    function renderAvatarSelector() {
-      const container = document.getElementById('avatar-selector');
-      container.innerHTML = '';
-      
-      avatars.forEach((avatar, index) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'avatar-thumb' + (index === currentAvatar ? ' active' : '');
-        thumb.textContent = avatar.name;
-        thumb.onclick = () => loadAvatar(index);
-        container.appendChild(thumb);
-      });
-      
-      // Add new button
-      const addBtn = document.createElement('div');
-      addBtn.className = 'avatar-thumb add-new';
-      addBtn.textContent = '+';
-      addBtn.title = 'Drop VRM file here';
-      addBtn.ondragover = (e) => e.preventDefault();
-      addBtn.ondrop = handleDrop;
-      container.appendChild(addBtn);
-    }
-
-    function loadAvatar(index) {
-      if (index >= avatars.length) return;
-      currentAvatar = index;
-      const avatar = avatars[index];
-      
-      setStatus('Loading...', 'info');
-      loader.load(
-        avatar.file,
-        (gltf) => {
-          const vrm = gltf.userData.vrm;
-          if (vrm) {
-            if (currentVRM) {
-              scene.remove(currentVRM.scene);
-            }
-            currentVRM = vrm;
-            vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-            scene.add(vrm.scene);
-            vrm.scene.position.set(0, 0, 0);
-            vrm.scene.rotation.y = 0;
-            idleTime = 0;
-            
-            // Fix T-pose: Arms down
-            if (vrm.humanoid) {
-              const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
-              const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
-              const rightForearm = vrm.humanoid.getRawBoneNode('rightLowerArm');
-              const leftForearm = vrm.humanoid.getRawBoneNode('leftLowerArm');
-              if (rightArm) rightArm.rotation.z = Math.PI / 2 - 0.3;
-              if (leftArm) leftArm.rotation.z = -(Math.PI / 2 - 0.3);
-              if (rightForearm) rightForearm.rotation.z = 0.2;
-              if (leftForearm) leftForearm.rotation.z = -0.2;
-            }
-            
-            setStatus('✓ Avatar geladen: ' + avatar.name, 'success');
-            renderAvatarSelector();
-          }
-        },
-        undefined,
-        (error) => {
-          setStatus('✗ Fehler: ' + error.message, 'error');
-        }
-      );
-    }
-
-    function handleDrop(e) {
-      e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (file && file.name.endsWith('.vrm')) {
-        // Upload to server
-        const formData = new FormData();
-        formData.append('vrm', file);
-        
-        setStatus('Uploading...', 'info');
-        
-        fetch('/upload-vrm', {
-          method: 'POST',
-          body: formData
-        })
-        .then(r => r.json())
-        .then(data => {
-          avatars.push({ name: file.name.replace('.vrm', ''), file: data.path });
-          loadAvatar(avatars.length - 1);
-        })
-        .catch(err => {
-          setStatus('✗ Upload failed', 'error');
-        });
-      }
-    }
-
-    // Drag and drop on whole page
-    document.body.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      document.getElementById('drop-zone').classList.add('active');
-    });
-    
-    document.body.addEventListener('dragleave', (e) => {
-      if (!e.relatedTarget) {
-        document.getElementById('drop-zone').classList.remove('active');
+      if (e.key.toLowerCase() === 'd') {
+        debugMode = !debugMode;
+        console.log('Debug:', debugMode ? 'ON' : 'OFF');
       }
     });
     
-    document.body.addEventListener('drop', (e) => {
-      e.preventDefault();
-      document.getElementById('drop-zone').classList.remove('active');
-      handleDrop(e);
-    });
-
-    // Initial render
-    renderAvatarSelector();
-
-    // TTS + Lip Sync
-    const ttsContainer = document.createElement('div');
-    ttsContainer.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:15px;border-radius:8px;z-index:100;';
-    ttsContainer.innerHTML = '<input id="tts-input" type="text" placeholder="Text zum Sprechen..." style="padding:8px;border-radius:4px;border:1px solid #333;background:#222;color:white;width:250px;"> <button id="tts-btn" style="padding:8px 16px;cursor:pointer;background:#4a4; border:none;border-radius:4px;color:white;">Sprechen</button>';
-    document.body.appendChild(ttsContainer);
-
-    // Improved Lip sync animation
-    const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
-    let lipSyncInterval = null;
-    let isSpeaking = false;
-
-    // Phoneme mapping for German
-    const phonemeMap = {
-      'a': 'aa', 'ä': 'aa', 'á': 'aa', 'à': 'aa',
-      'e': 'ih', 'é': 'ih', 'è': 'ih', 'ê': 'ih', 'ë': 'ih',
-      'i': 'ih', 'í': 'ih', 'ì': 'ih',
-      'o': 'oh', 'ó': 'oh', 'ò': 'oh', 'ô': 'oh',
-      'u': 'ou', 'ú': 'ou', 'ù': 'ou',
-      'y': 'ih',
-      'w': 'ou', 'v': 'ou',
-      'b': 'aa', 'd': 'ih', 'f': 'ih', 'g': 'aa', 'h': 'aa',
-      'j': 'ih', 'k': 'aa', 'l': 'ih', 'm': 'oh', 'n': 'ih',
-      'p': 'oh', 'r': 'ih', 's': 'ih', 't': 'ih', 'z': 'ih',
-      'th': 'aa', 'ch': 'ih', 'sch': 'ih', 'ng': 'ih'
-    };
-
-    function setMouth(shape, value = 1.0) {
+    // Make functions global for onclick handlers
+    window.setAnimation = setAnimation;
+    window.setFace = setFace;
+    
+    // Animation switcher
+    function setFace(name, value = 1) {
+      if (currentVRM?.expressionManager) {
+        currentVRM.expressionManager.setValue(name, value);
+      }
+    }
+    
+    // Animation switcher - use AnimationMixer
+    function setAnimation(name) {
+      if (!mixer) return;
+      
+      const clip = animations[name];
+      if (!clip) {
+        console.log('No animation:', name);
+        return;
+      }
+      
+      // Use AnimationMixer
+      mixer.timeScale = 1;
+      const newAction = mixer.clipAction(clip);
+      
+      console.log('Playing animation. Tracks:', clip.tracks.slice(0, 3).map(t => t.name));
+      
+      if (action && action !== newAction) {
+        action.crossFadeTo(newAction, 0.3, true);
+      }
+      newAction.reset().play();
+      action = newAction;
+      
+      console.log('Switched to:', name);
+    }
+    
+    // Remove manual animation code
+    window.addEventListener('keydown', (e) => {
       if (!currentVRM?.expressionManager) return;
-      mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
-      if (shape) currentVRM.expressionManager.setValue(shape, value);
-    }
-
-    function resetMouth() {
-      isSpeaking = false;
-      setMouth(null, 0);
-    }
-
-    function startLipSync(text) {
-      if (lipSyncInterval) clearInterval(lipSyncInterval);
-      
-      // Clean text
-      const cleanText = text.toLowerCase().replace(/[^a-zäöüß]/g, '');
-      if (!cleanText.length) return;
-      
-      isSpeaking = true;
-      
-      // Estimate duration (average 3 syllables per second for German)
-      const duration = Math.max(500, (cleanText.length / 5) * 1000);
-      const interval = 80; // ~12 frames per second
-      const steps = Math.floor(duration / interval);
-      let step = 0;
-      
-      setMouth('aa', 0.3); // Start neutral-ish
-      
-      lipSyncInterval = setInterval(() => {
-        if (!isSpeaking || !currentVRM?.expressionManager || step >= steps) {
-          clearInterval(lipSyncInterval);
-          resetMouth();
-          return;
-        }
-        
-        // Pick mouth shape based on phoneme
-        const char = cleanText[Math.floor(Math.random() * cleanText.length)];
-        const shape = phonemeMap[char] || 'aa';
-        
-        // Vary the intensity for more natural look
-        const intensity = 0.5 + Math.random() * 0.5;
-        setMouth(shape, intensity);
-        
-        step++;
-      }, interval);
-    }
-
-    // Use Web Speech API
-    const synth = window.speechSynthesis;
-    const input = document.getElementById('tts-input');
-    const btn = document.getElementById('tts-btn');
-
-    btn.addEventListener('click', () => {
-      const text = input.value || 'Hallo, ich kann sprechen!';
-      
-      // Use German voice if available
-      const voices = synth.getVoices();
-      const germanVoice = voices.find(v => v.lang.startsWith('de')) || voices[0];
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      if (germanVoice) utterance.voice = germanVoice;
-      utterance.lang = 'de-DE';
-      utterance.rate = 0.9;
-      
-      utterance.onstart = () => startLipSync(text);
-      
-      synth.speak(utterance);
+      const map = {'1':'aa','2':'ih','3':'ou','4':'ee','5':'oh','q':'happy','w':'sad','e':'angry','r':'surprised'};
+      const expr = map[e.key.toLowerCase()];
+      if (expr) currentVRM.expressionManager.setValue(expr, 1);
     });
-
-    // Load voices
-    speechSynthesis.onvoiceschanged = () => {
-      console.log('Voices loaded:', speechSynthesis.getVoices().map(v => v.name));
-    };
-
-    // TTS Polling from server
-    let lastText = '';
-    const ttsStatus = document.createElement('div');
-    ttsStatus.style.cssText = 'position:fixed;top:140px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;z-index:100;font-size:12px;color:#888;';
-    ttsStatus.textContent = 'Warte auf TTS... (drück STRG+S zum Sagen)';
-    document.body.appendChild(ttsStatus);
-
-    function playAudioFile(text, filename) {
-      if (!filename || isSpeaking) return;
-      
-      isSpeaking = true;
-      ttsStatus.textContent = '🎤 Spiele: ' + text.substring(0, 30);
-      console.log('🎧 Playing:', filename);
-      
-      const audioUrl = '/audio/' + filename;
-      const audio = new Audio(audioUrl);
-      
-      // Start lip sync with the text
-      startLipSync(text);
-      
-      audio.onended = () => {
-        ttsStatus.textContent = '✓ Fertig';
-        resetMouth();
-        isSpeaking = false;
-        lastText = '';
-        // Clear the file after playing
-        fetch('/audio/latest.json', {
-          method: 'PUT',
-          body: JSON.stringify({ text: '', file: '' })
-        }).catch(() => {});
-      };
-      
-      audio.onerror = (e) => {
-        console.error('Audio Error:', e);
-        ttsStatus.textContent = '✗ Fehler beim Abspielen';
-        isSpeaking = false;
-        lastText = '';
-      };
-      
-      audio.play().catch(e => {
-        console.error('Play Error:', e);
-        isSpeaking = false;
-      });
-    }
-
-    function speakText(text) {
-      if (!text || text.trim() === '' || isSpeaking) return;
-      
-      isSpeaking = true;
-      ttsStatus.textContent = '🔄 Generiere TTS...';
-      console.log('🎤 Generating TTS for:', text);
-      
-      // Call TTS endpoint
-      fetch('/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: text,
-          voice: 'de-DE-ConradNeural'
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.file) {
-          playAudioFile(text, data.file);
-        } else {
-          throw new Error(data.error || 'TTS failed');
-        }
-      })
-      .catch(e => {
-        console.error('TTS Error:', e);
-        ttsStatus.textContent = '✗ TTS Fehler: ' + e.message;
-        isSpeaking = false;
-      });
-    }
-
-    function pollForTTS() {
-      if (isSpeaking) return; // Don't poll while speaking
-      
-      fetch('/audio/latest.json')
-        .then(r => r.json())
-        .then(data => {
-          console.log('📥 Poll:', data);
-          if (data.text && data.text.trim() !== '' && data.text !== lastText && data.file) {
-            // Clear the file immediately to prevent re-triggering
-            fetch('/audio/latest.json', {
-              method: 'PUT',
-              body: JSON.stringify({ text: '', file: '' })
-            }).catch(() => {});
-            playAudioFile(data.text, data.file);
-          }
-        })
-        .catch((e) => console.error('Poll error:', e));
-    }
-
-    // Poll every 2 seconds
-    setInterval(pollForTTS, 2000);
-
-    // Manual trigger: STRG+S
-    window.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        const input = document.getElementById('tts-input');
-        if (input.value.trim()) {
-          speakText(input.value);
-        }
-      }
+    
+    window.addEventListener('keyup', (e) => {
+      if (!currentVRM?.expressionManager) return;
+      const map = {'1':'aa','2':'ih','3':'ou','4':'ee','5':'oh','q':'happy','w':'sad','e':'angry','r':'surprised'};
+      const expr = map[e.key.toLowerCase()];
+      if (expr) currentVRM.expressionManager.setValue(expr, 0);
     });
-
-    // Poll immediately on load
-    pollForTTS();
   </script>
 </body>
 </html>

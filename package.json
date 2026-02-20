@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/moritzhckr/hmi-face-rig#readme",
   "dependencies": {
-    "node-edge-tts": "^1.2.10"
+    "node-edge-tts": "^1.2.10",
+    "vrm-mixamo-retarget": "^1.0.3"
   }
 }
