@@ -83,16 +83,12 @@
     <div class="menu-section">
       <h3>Body Animation</h3>
       <button class="menu-btn active" id="btn-idle" onclick="setAnimation('idle')">🧍 Idle</button>
-      <button class="menu-btn" id="btn-anim1" onclick="setAnimation('anim1')">1: walk_forward</button>
-      <button class="menu-btn" id="btn-anim2" onclick="setAnimation('anim2')">2: walk_backward</button>
-      <button class="menu-btn" id="btn-anim3" onclick="setAnimation('anim3')">3</button>
-      <button class="menu-btn" id="btn-anim4" onclick="setAnimation('anim4')">4</button>
-      <button class="menu-btn" id="btn-anim5" onclick="setAnimation('anim5')">5</button>
-      <button class="menu-btn" id="btn-anim6" onclick="setAnimation('anim6')">6</button>
-      <button class="menu-btn" id="btn-anim7" onclick="setAnimation('anim7')">7</button>
-      <button class="menu-btn" id="btn-anim8" onclick="setAnimation('anim8')">8</button>
-      <button class="menu-btn" id="btn-anim9" onclick="setAnimation('anim9')">9</button>
-      <button class="menu-btn" id="btn-anim10" onclick="setAnimation('anim10')">10</button>
+      <button class="menu-btn" id="btn-armStretch" onclick="setAnimation('armStretch')">💪 Arm Stretching</button>
+      <button class="menu-btn" id="btn-defeated" onclick="setAnimation('defeated')">😞 Defeated</button>
+      <button class="menu-btn" id="btn-hipHop" onclick="setAnimation('hipHop')">🕺 Hip Hop</button>
+      <button class="menu-btn" id="btn-praying" onclick="setAnimation('praying')">🙏 Praying</button>
+      <button class="menu-btn" id="btn-arguing" onclick="setAnimation('arguing')">😠 Arguing</button>
+      <button class="menu-btn" id="btn-talking" onclick="setAnimation('talking')">💬 Talking</button>
     </div>
     
     <div class="menu-section">
@@ -122,7 +118,7 @@
       <h3>Debug</h3>
       <button class="menu-btn" id="btn-stats" onclick="toggleStats()">📊 FPS Stats</button>
       <button class="menu-btn" id="btn-rig" onclick="toggleRig()">🦴 Debug Rig</button>
-      <button class="menu-btn" id="btn-webcam" onclick="toggleWebcam()">📷 Webcam</button>
+      <button class="menu-btn" id="btn-webcam" onclick="toggleWebcam()">📷 Facecam</button>
     </div>
   </div>
   
@@ -203,8 +199,6 @@
     let currentAnimationClip = null;
     let animationTime = 0;
     let idleClip = null;
-    let walkClip = null;
-    let walkBackClip = null;
     
     // Animation clips storage
     const animations = {};
@@ -212,6 +206,7 @@
     // Helper root for VRM debugging
     const helperRoot = new THREE.Group();
     helperRoot.renderOrder = 10000;
+    helperRoot.visible = false;
     scene.add(helperRoot);
 
     // Animation loading is handled below with unified loader
@@ -225,6 +220,11 @@
     let statsEnabled = false;
     let rigEnabled = false;
     let webcamEnabled = false;
+    
+    // Sync button states on load
+    document.getElementById('btn-stats').classList.remove('active');
+    document.getElementById('btn-rig').classList.remove('active');
+    document.getElementById('btn-webcam').classList.remove('active');
     
     function toggleStats() {
       statsEnabled = !statsEnabled;
@@ -240,25 +240,28 @@
     
     async function toggleWebcam() {
       webcamEnabled = !webcamEnabled;
-      const video = document.getElementById('webcam');
       const btn = document.getElementById('btn-webcam');
       
       if (webcamEnabled) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-          video.srcObject = stream;
-          video.style.display = 'block';
-          btn.classList.add('active');
-        } catch (e) {
-          console.error('Webcam error:', e);
-          webcamEnabled = false;
+        // Position camera ~40cm in front of head
+        if (currentVRM?.humanoid) {
+          const head = currentVRM.humanoid.getNormalizedBoneNode('head');
+          if (head) {
+            const headWorldPos = new THREE.Vector3();
+            head.getWorldPosition(headWorldPos);
+            camera.position.set(headWorldPos.x, headWorldPos.y + 0.05, headWorldPos.z + 0.4);
+            controls.target.copy(headWorldPos);
+            controls.update();
+          }
         }
+        btn.classList.add('active');
       } else {
-        const stream = video.srcObject;
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        video.srcObject = null;
-        video.style.display = 'none';
         btn.classList.remove('active');
+        
+        // Reset camera position
+        camera.position.set(0, 1.6, 0.8);
+        controls.target.set(0, 1, 0);
+        controls.update();
       }
     }
     
@@ -309,35 +312,27 @@
 
         // Disable frustum culling
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+        
+        // Ensure debug rig stays hidden unless toggled
+        helperRoot.visible = rigEnabled;
 
         // Create AnimationMixer
         mixer = new THREE.AnimationMixer(vrm.scene);
         
-        // Debug: log bones in scene
-        const sceneBones = [];
-        vrm.scene.traverse((obj) => {
-          if (obj.isBone) sceneBones.push(obj.name);
-        });
-        console.log('Scene bones:', sceneBones.slice(0, 20));
-
         // IMPORTANT: Rotate VRM0
         VRMUtils.rotateVRM0(vrm);
 
-        console.log('VRM loaded:', vrm);
+        console.log('VRM loaded');
 
         // Load all animations
         const animFiles = {
           'idle': { url: '/animations/Idle.fbx', type: 'fbx' },
-          'anim1': { url: '/animations/walk_forward.glb', type: 'glb' },
-          'anim2': { url: '/animations/walk_backward.glb', type: 'glb' },
-          'anim3': { url: '/animations/anim_797a510d-5b5c-4082-b.glb', type: 'glb' },
-          'anim4': { url: '/animations/anim_8edb8d05-9cba-46f8-8.glb', type: 'glb' },
-          'anim5': { url: '/animations/anim_4d0b10e5-38f7-4443-b.glb', type: 'glb' },
-          'anim6': { url: '/animations/anim_eb33bde4-2c28-46a4-a.glb', type: 'glb' },
-          'anim7': { url: '/animations/anim_a0f35981-ff7f-43be-b.glb', type: 'glb' },
-          'anim8': { url: '/animations/anim_83f8caf7-4b85-4f60-8.glb', type: 'glb' },
-          'anim9': { url: '/animations/anim_ce18f5d2-1d7f-470b-8.glb', type: 'glb' },
-          'anim10': { url: '/animations/anim_1b49202d-72dc-4b82-9.glb', type: 'glb' }
+          'armStretch': { url: '/animations/arm_stretching.fbx', type: 'fbx' },
+          'defeated': { url: '/animations/defeated.fbx', type: 'fbx' },
+          'hipHop': { url: '/animations/hip_hop_dancing.fbx', type: 'fbx' },
+          'praying': { url: '/animations/praying.fbx', type: 'fbx' },
+          'arguing': { url: '/animations/standing_arguing.fbx', type: 'fbx' },
+          'talking': { url: '/animations/talking.fbx', type: 'fbx' }
         };
         
         // Helper to load based on type
@@ -347,13 +342,8 @@
             return retargetAnimation(fbx, vrm);
           } else {
             const gltf = await new Promise((resolve, reject) => window.gltfLoader.load(config.url, resolve, undefined, reject));
-            console.log('GLB loaded:', name, '- animations:', gltf.animations?.length || 0);
             if (gltf.animations && gltf.animations.length > 0) {
-              const clip = retargetAnimation(gltf, vrm);
-              console.log('Retarget result:', name, clip ? 'success' : 'null');
-              return clip;
-            } else {
-              console.log('No animations in GLB:', name);
+              return retargetAnimation(gltf, vrm);
             }
           }
           return null;
@@ -361,15 +351,12 @@
         
         const loadPromises = Object.entries(animFiles).map(([name, config]) => {
           return loadAnimation(name, config).then(clip => {
-            if (clip) {
-              animations[name] = clip;
-              console.log('Loaded:', name);
-            }
+            if (clip) animations[name] = clip;
           }).catch(e => console.error('Error loading', name, e));
         });
         
         Promise.all(loadPromises).then(() => {
-          console.log('All animations loaded!');
+          console.log('All animations loaded');
           loadingEl.textContent = '';  // Hide loading
           setAnimation('idle'); // Default animation
           setStatus('✓ Alles geladen!', 'success');
@@ -434,10 +421,7 @@
       
       // Debug: rotate head if animation not working
       if (currentVRM?.humanoid) {
-        const head = currentVRM.humanoid.getRawBoneNode('head');
-        if (head && Math.random() < 0.01) {
-          console.log('Head bone found:', head.name);
-        }
+        // Head bone is available for manual animation if needed
       }
       
       // Update VRM
@@ -495,24 +479,27 @@
       if (!mixer) return;
       
       const clip = animations[name];
-      if (!clip) {
-        console.log('No animation:', name);
-        return;
-      }
+      if (!clip) return;
+      
+      // Update button states
+      document.querySelectorAll('#side-menu .menu-btn').forEach(btn => btn.classList.remove('active'));
+      const btnId = 'btn-' + name;
+      const btn = document.getElementById(btnId);
+      if (btn) btn.classList.add('active');
+      
+      // Update current animation tracking
+      currentAnimation = name;
+      currentAnimationClip = clip;
       
       // Use AnimationMixer
       mixer.timeScale = 1;
       const newAction = mixer.clipAction(clip);
-      
-      console.log('Playing animation. Tracks:', clip.tracks.slice(0, 3).map(t => t.name));
       
       if (action && action !== newAction) {
         action.crossFadeTo(newAction, 0.3, true);
       }
       newAction.reset().play();
       action = newAction;
-      
-      console.log('Switched to:', name);
     }
     
     // TTS + Lip Sync
@@ -673,7 +660,9 @@
             playAudioFile(data.text, data.file);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          // Silently ignore - no audio file yet
+        });
     }
 
     setInterval(pollForTTS, 2000);
