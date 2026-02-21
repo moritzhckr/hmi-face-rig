@@ -214,36 +214,7 @@
     helperRoot.renderOrder = 10000;
     scene.add(helperRoot);
 
-    // FBX Loader for Idle animation
-    const fbxLoader = new FBXLoader();
-    
-    // Load Idle FBX using vrm-mixamo-retarget library
-    async function loadIdleFBX(vrm) {
-      console.log('=== Loading Idle.fbx with vrm-mixamo-retarget ===');
-      try {
-        const fbx = await new Promise((resolve, reject) => {
-          fbxLoader.load('/animations/Idle.fbx', resolve, undefined, reject);
-        });
-        
-        console.log('FBX loaded');
-        
-        // Use the library to retarget
-        const clip = retargetAnimation(fbx, vrm);
-        
-        if (clip) {
-          clip.name = 'idle';
-          animations['idle'] = clip;
-          console.log('✅ Idle FBX converted with vrm-mixamo-retarget! Duration:', clip.duration);
-          console.log('Sample tracks:', clip.tracks.slice(0, 3).map(t => t.name));
-          return clip;
-        } else {
-          console.log('❌ retargetAnimation returned null');
-        }
-      } catch (e) {
-        console.error('❌ Error loading Idle.fbx:', e);
-      }
-      return null;
-    }
+    // Animation loading is handled below with unified loader
 
     // Stats
     const stats = new Stats();
@@ -294,12 +265,16 @@
     window.toggleStats = toggleStats;
     window.toggleRig = toggleRig;
     window.toggleWebcam = toggleWebcam;
-
+    
+    // Global loaders for animation loading
+    window.gltfLoader = new GLTFLoader();
+    window.gltfLoader.crossOrigin = 'anonymous';
+    window.fbxLoader = new FBXLoader();
+    
     // Load VRM
     setStatus('Loading VRM...', 'info');
     
-    const loader = new GLTFLoader();
-    loader.crossOrigin = 'anonymous';
+    const loader = window.gltfLoader;
     
     // IMPORTANT: Register VRMLoaderPlugin with autoUpdateHumanBones
     loader.register((parser) => {
@@ -352,20 +327,40 @@
 
         // Load all animations
         const animFiles = {
-          'anim1': '/animations/walk_forward.glb',
-          'anim2': '/animations/walk_backward.glb',
-          'anim3': '/animations/anim_797a510d-5b5c-4082-b.glb',
-          'anim4': '/animations/anim_8edb8d05-9cba-46f8-8.glb',
-          'anim5': '/animations/anim_4d0b10e5-38f7-4443-b.glb',
-          'anim6': '/animations/anim_eb33bde4-2c28-46a4-a.glb',
-          'anim7': '/animations/anim_a0f35981-ff7f-43be-b.glb',
-          'anim8': '/animations/anim_83f8caf7-4b85-4f60-8.glb',
-          'anim9': '/animations/anim_ce18f5d2-1d7f-470b-8.glb',
-          'anim10': '/animations/anim_1b49202d-72dc-4b82-9.glb'
+          'idle': { url: '/animations/Idle.fbx', type: 'fbx' },
+          'anim1': { url: '/animations/walk_forward.glb', type: 'glb' },
+          'anim2': { url: '/animations/walk_backward.glb', type: 'glb' },
+          'anim3': { url: '/animations/anim_797a510d-5b5c-4082-b.glb', type: 'glb' },
+          'anim4': { url: '/animations/anim_8edb8d05-9cba-46f8-8.glb', type: 'glb' },
+          'anim5': { url: '/animations/anim_4d0b10e5-38f7-4443-b.glb', type: 'glb' },
+          'anim6': { url: '/animations/anim_eb33bde4-2c28-46a4-a.glb', type: 'glb' },
+          'anim7': { url: '/animations/anim_a0f35981-ff7f-43be-b.glb', type: 'glb' },
+          'anim8': { url: '/animations/anim_83f8caf7-4b85-4f60-8.glb', type: 'glb' },
+          'anim9': { url: '/animations/anim_ce18f5d2-1d7f-470b-8.glb', type: 'glb' },
+          'anim10': { url: '/animations/anim_1b49202d-72dc-4b82-9.glb', type: 'glb' }
         };
         
-        const loadPromises = Object.entries(animFiles).map(([name, url]) => {
-          return loadMixamoAnimation(url, vrm).then(clip => {
+        // Helper to load based on type
+        async function loadAnimation(name, config) {
+          if (config.type === 'fbx') {
+            const fbx = await new Promise((resolve, reject) => window.fbxLoader.load(config.url, resolve, undefined, reject));
+            return retargetAnimation(fbx, vrm);
+          } else {
+            const gltf = await new Promise((resolve, reject) => window.gltfLoader.load(config.url, resolve, undefined, reject));
+            console.log('GLB loaded:', name, '- animations:', gltf.animations?.length || 0);
+            if (gltf.animations && gltf.animations.length > 0) {
+              const clip = retargetAnimation(gltf, vrm);
+              console.log('Retarget result:', name, clip ? 'success' : 'null');
+              return clip;
+            } else {
+              console.log('No animations in GLB:', name);
+            }
+          }
+          return null;
+        }
+        
+        const loadPromises = Object.entries(animFiles).map(([name, config]) => {
+          return loadAnimation(name, config).then(clip => {
             if (clip) {
               animations[name] = clip;
               console.log('Loaded:', name);
@@ -374,12 +369,9 @@
         });
         
         Promise.all(loadPromises).then(() => {
-          // Load Idle FBX
-          return loadIdleFBX(vrm);
-        }).then(() => {
           console.log('All animations loaded!');
           loadingEl.textContent = '';  // Hide loading
-          setAnimation('anim10'); // Default animation
+          setAnimation('idle'); // Default animation
           setStatus('✓ Alles geladen!', 'success');
         });
       },
@@ -523,8 +515,193 @@
       console.log('Switched to:', name);
     }
     
-    // Remove manual animation code
-    window.addEventListener('keydown', (e) => {
+    // TTS + Lip Sync
+    const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
+    let lipSyncAnimFrame = null;
+    let isSpeaking = false;
+    let audioContext = null;
+    let analyser = null;
+    let audioDataArray = null;
+
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.5;
+        audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+      }
+      return { audioContext, analyser, audioDataArray };
+    }
+
+    function setMouth(shape, value = 1.0) {
+      if (!currentVRM?.expressionManager) return;
+      mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
+      if (shape) currentVRM.expressionManager.setValue(shape, value);
+    }
+
+    function resetMouth() {
+      isSpeaking = false;
+      if (lipSyncAnimFrame) {
+        cancelAnimationFrame(lipSyncAnimFrame);
+        lipSyncAnimFrame = null;
+      }
+      setMouth(null, 0);
+    }
+
+    function startLipSyncFromAudio(audioElement) {
+      const { audioContext: ctx, analyser: an, audioDataArray: dataArr } = getAudioContext();
+      
+      // Resume context if suspended (browser autoplay policy)
+      if (ctx.state === 'suspended') ctx.resume();
+      
+      // Connect audio element to analyser
+      const source = ctx.createMediaElementSource(audioElement);
+      source.connect(an);
+      an.connect(ctx.destination);
+      
+      isSpeaking = true;
+
+      function updateLipSync() {
+        if (!isSpeaking || !currentVRM?.expressionManager) {
+          resetMouth();
+          return;
+        }
+        
+        an.getByteFrequencyData(dataArr);
+        
+        // Get amplitude from different frequency bands
+        const low = dataArr.slice(0, 8).reduce((a, b) => a + b, 0) / 8;     // ~0-300Hz (vowels)
+        const mid = dataArr.slice(8, 24).reduce((a, b) => a + b, 0) / 16;   // ~300-1kHz
+        const high = dataArr.slice(24, 64).reduce((a, b) => a + b, 0) / 40; // ~1k-4kHz (consonants)
+        
+        // Normalize to 0-1
+        const lowN = Math.min(1, low / 180);
+        const midN = Math.min(1, mid / 160);
+        const highN = Math.min(1, high / 140);
+        
+        // Overall volume for mouth opening
+        const volume = (lowN * 0.5 + midN * 0.3 + highN * 0.2);
+        
+        // Map frequency bands to mouth shapes
+        if (volume < 0.05) {
+          // Silence - close mouth
+          mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
+        } else {
+          // Reset all first
+          mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
+          
+          // Low frequencies → wide open (aa)
+          // Mid frequencies → medium open (oh/ou)
+          // High frequencies → narrow (ih/ee)
+          if (lowN > midN && lowN > highN) {
+            currentVRM.expressionManager.setValue('aa', volume * 0.9);
+            currentVRM.expressionManager.setValue('oh', volume * 0.2);
+          } else if (highN > lowN) {
+            currentVRM.expressionManager.setValue('ih', volume * 0.7);
+            currentVRM.expressionManager.setValue('ee', volume * 0.3);
+          } else {
+            currentVRM.expressionManager.setValue('oh', volume * 0.6);
+            currentVRM.expressionManager.setValue('ou', volume * 0.4);
+          }
+        }
+        
+        lipSyncAnimFrame = requestAnimationFrame(updateLipSync);
+      }
+      
+      updateLipSync();
+    }
+
+    // TTS Status Display
+    const ttsStatus = document.createElement('div');
+    ttsStatus.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.8);padding:10px;border-radius:8px;z-index:100;font-size:12px;color:#888;';
+    ttsStatus.textContent = 'Klick für Audio aktivieren';
+    document.body.appendChild(ttsStatus);
+    
+    let audioEnabled = false;
+    ttsStatus.style.cursor = 'pointer';
+    ttsStatus.onclick = () => {
+      audioEnabled = true;
+      ttsStatus.textContent = '✓ Audio aktiviert';
+    };
+
+    function playAudioFile(text, filename) {
+      if (!filename || isSpeaking || !audioEnabled) {
+        if (!audioEnabled) ttsStatus.textContent = 'Klick für Audio aktivieren!';
+        return;
+      }
+      
+      isSpeaking = true;
+      ttsStatus.textContent = '🔊 Spiele: ' + text.substring(0, 30);
+      
+      const audioUrl = '/audio/' + filename;
+      const audio = new Audio(audioUrl);
+      audio.crossOrigin = 'anonymous'; // Required for Web Audio API
+      
+      audio.onended = () => {
+        ttsStatus.textContent = '✓ Fertig';
+        resetMouth();
+        lastText = '';
+      };
+      
+      audio.onerror = (e) => {
+        console.error('Audio Error:', e);
+        ttsStatus.textContent = '✗ Fehler';
+        isSpeaking = false;
+      };
+      
+      audio.play().then(() => {
+        startLipSyncFromAudio(audio);
+      }).catch(e => {
+        console.error('Play Error:', e);
+        isSpeaking = false;
+      });
+    }
+
+    let lastText = '';
+    function pollForTTS() {
+      if (isSpeaking) return;
+      fetch('/audio/latest.json')
+        .then(r => r.json())
+        .then(data => {
+          if (data.text && data.text.trim() !== '' && data.file) {
+            // Clear immediately to prevent re-triggering
+            fetch('/audio/latest.json', {
+              method: 'PUT',
+              body: JSON.stringify({ text: '', file: '' })
+            }).catch(() => {});
+            playAudioFile(data.text, data.file);
+          }
+        })
+        .catch(() => {});
+    }
+
+    setInterval(pollForTTS, 2000);
+    
+    // /speak command handler
+    window.speakText = function(text) {
+      if (!text || text.trim() === '' || isSpeaking) return;
+      
+      ttsStatus.textContent = '🔄 Generiere...';
+      
+      fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, voice: 'de-DE-ConradNeural' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.file) {
+          playAudioFile(text, data.file);
+        }
+      })
+      .catch(e => {
+        console.error('TTS Error:', e);
+        ttsStatus.textContent = '✗ Fehler';
+      });
+    };
+
+  </script>
       if (!currentVRM?.expressionManager) return;
       const map = {'1':'aa','2':'ih','3':'ou','4':'ee','5':'oh','q':'happy','w':'sad','e':'angry','r':'surprised'};
       const expr = map[e.key.toLowerCase()];
