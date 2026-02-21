@@ -45,13 +45,20 @@ node tts-speak.cjs "Hallo Welt"
 - **Idle**: Mixamo FBX animation, retargeted mit vrm-mixamo-retarget library
 - **Other animations**: GLB files mit manueller Retargeting-Logik
 
-## Recent Updates (20.02.2026)
+## Lip-Sync
 
-- ✅ Idle FBX Animation funktioniert!
-- ✅ vrm-mixamo-retarget Library integriert
-- ✅ Touch-Controls für Mobile
-- ✅ Animation Buttons wiederhergestellt
+Real-time lip-sync using **Web Audio API**:
+- `AnalyserNode` reads frequency data from TTS audio
+- Low frequencies → wide mouth (`aa`)
+- Mid frequencies → round mouth (`oh`/`ou`)
+- High frequencies → narrow mouth (`ih`/`ee`)
+- Mouth closes during silence, scales with volume
+
+## Recent Updates
+
+- **21.02.2026:** Web Audio API lip-sync (real-time amplitude-based mouth animation)
+- **20.02.2026:** Idle FBX Animation, vrm-mixamo-retarget, Touch Controls, Animation Buttons
 
 ---
 
-*Zuletzt aktualisiert: 20.02.2026*
+*Zuletzt aktualisiert: 21.02.2026*
