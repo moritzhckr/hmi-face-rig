@@ -506,9 +506,18 @@
     const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
     let lipSyncAnimFrame = null;
     let isSpeaking = false;
+    let currentQueueId = null;
     let audioContext = null;
     let analyser = null;
     let audioDataArray = null;
+
+    function reportPlaybackEvent(type, detail = {}) {
+      fetch('/audio/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, queueId: currentQueueId, ...detail })
+      }).catch(() => {});
+    }
 
     function getAudioContext() {
       if (!audioContext) {
@@ -612,13 +621,15 @@
       ttsStatus.textContent = '✓ Audio aktiviert';
     };
 
-    function playAudioFile(text, filename) {
+    function playAudioFile(text, filename, queueId = null) {
       if (!filename || isSpeaking || !audioEnabled) {
         if (!audioEnabled) ttsStatus.textContent = 'Klick für Audio aktivieren!';
         return;
       }
       
       isSpeaking = true;
+      currentQueueId = queueId;
+      reportPlaybackEvent('playback.start', { file: filename, text });
       ttsStatus.textContent = '🔊 Spiele: ' + text.substring(0, 30);
       
       const audioUrl = '/audio/' + filename;
@@ -627,45 +638,47 @@
       
       audio.onended = () => {
         ttsStatus.textContent = '✓ Fertig';
+        reportPlaybackEvent('playback.end', { file: filename, text });
         resetMouth();
+        currentQueueId = null;
         lastText = '';
       };
       
       audio.onerror = (e) => {
         console.error('Audio Error:', e);
         ttsStatus.textContent = '✗ Fehler';
+        reportPlaybackEvent('playback.error', { file: filename, text, detail: String(e?.message || 'audio error') });
         isSpeaking = false;
+        currentQueueId = null;
       };
       
       audio.play().then(() => {
         startLipSyncFromAudio(audio);
       }).catch(e => {
         console.error('Play Error:', e);
+        reportPlaybackEvent('playback.error', { file: filename, text, detail: String(e?.message || 'play error') });
         isSpeaking = false;
+        currentQueueId = null;
       });
     }
 
     let lastText = '';
     function pollForTTS() {
       if (isSpeaking) return;
-      fetch('/audio/latest.json')
+      fetch('/audio/queue?consume=1')
         .then(r => r.json())
         .then(data => {
-          if (data.text && data.text.trim() !== '' && data.file) {
-            // Clear immediately to prevent re-triggering
-            fetch('/audio/latest.json', {
-              method: 'PUT',
-              body: JSON.stringify({ text: '', file: '' })
-            }).catch(() => {});
-            playAudioFile(data.text, data.file);
+          const item = data?.item;
+          if (item?.text && item?.file) {
+            playAudioFile(item.text, item.file, item.queueId || null);
           }
         })
         .catch(() => {
-          // Silently ignore - no audio file yet
+          // Silently ignore - no queued audio yet
         });
     }
 
-    setInterval(pollForTTS, 2000);
+    setInterval(pollForTTS, 1000);
     
     // /speak command handler
     window.speakText = function(text) {
@@ -681,7 +694,7 @@
       .then(r => r.json())
       .then(data => {
         if (data.success && data.file) {
-          playAudioFile(text, data.file);
+          playAudioFile(text, data.file, data.queueId || null);
         }
       })
       .catch(e => {
@@ -690,19 +703,21 @@
       });
     };
 
-  </script>
+    // Keyboard controls for quick face testing
+    window.addEventListener('keydown', (e) => {
       if (!currentVRM?.expressionManager) return;
       const map = {'1':'aa','2':'ih','3':'ou','4':'ee','5':'oh','q':'happy','w':'sad','e':'angry','r':'surprised'};
       const expr = map[e.key.toLowerCase()];
       if (expr) currentVRM.expressionManager.setValue(expr, 1);
     });
-    
+
     window.addEventListener('keyup', (e) => {
       if (!currentVRM?.expressionManager) return;
       const map = {'1':'aa','2':'ih','3':'ou','4':'ee','5':'oh','q':'happy','w':'sad','e':'angry','r':'surprised'};
       const expr = map[e.key.toLowerCase()];
       if (expr) currentVRM.expressionManager.setValue(expr, 0);
     });
+
   </script>
 </body>
 </html>
