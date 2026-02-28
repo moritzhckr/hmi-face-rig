@@ -36,7 +36,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let filePath = req.url === '/' ? '/index.html' : req.url;
+  const requestUrl = new URL(req.url, `http://localhost:${PORT}`);
+  let filePath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
 
   // VRM model list API (for model switcher UI)
   if (req.method === 'GET' && req.url === '/vrm/list') {
