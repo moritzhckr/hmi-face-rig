@@ -227,6 +227,16 @@
     </div>
     
     <div class="menu-section">
+      <h3>Audio Settings</h3>
+      <div style="font-size:11px;color:#888;margin-bottom:6px;">Input (Mikrofon)</div>
+      <select id="audio-input-select" style="width:100%;min-height:38px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;"></select>
+      <div style="font-size:11px;color:#888;margin:8px 0 6px;">Output (Lautsprecher)</div>
+      <select id="audio-output-select" style="width:100%;min-height:38px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;"></select>
+      <button class="menu-btn" id="btn-audio-refresh" style="margin-top:8px;text-align:center;" onclick="refreshAudioDevices()">🔄 Audio Devices aktualisieren</button>
+      <div id="audio-settings-hint" style="font-size:11px;color:#777;margin-top:6px;">Output-Auswahl klappt je nach Browser unterschiedlich.</div>
+    </div>
+
+    <div class="menu-section">
       <h3>Debug</h3>
       <button class="menu-btn" id="btn-stats" onclick="toggleStats()">📊 FPS Stats</button>
       <button class="menu-btn" id="btn-rig" onclick="toggleRig()">🦴 Debug Rig</button>
@@ -839,15 +849,26 @@
     let micAnalyser = null;
     let micData = null;
     let micLevelRAF = null;
+    let selectedInputDeviceId = null;
+    let selectedOutputDeviceId = null;
+    let activeAudioElement = null;
 
     async function ensureMicrophoneReady() {
-      if (micStream) return true;
       if (!navigator.mediaDevices?.getUserMedia) {
         ttsStatus.textContent = '✗ Browser unterstützt kein getUserMedia';
         return false;
       }
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (micStream) {
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+        }
+
+        const constraints = selectedInputDeviceId
+          ? { audio: { deviceId: { exact: selectedInputDeviceId } } }
+          : { audio: true };
+
+        micStream = await navigator.mediaDevices.getUserMedia(constraints);
         const ctx = getAudioContext();
         const source = ctx.audioContext.createMediaStreamSource(micStream);
         micAnalyser = ctx.audioContext.createAnalyser();
@@ -861,6 +882,52 @@
         return false;
       }
     }
+
+    async function refreshAudioDevices() {
+      const inSel = document.getElementById('audio-input-select');
+      const outSel = document.getElementById('audio-output-select');
+      const hint = document.getElementById('audio-settings-hint');
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        if (hint) hint.textContent = 'enumerateDevices wird in diesem Browser nicht unterstützt.';
+        return;
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const inputs = devices.filter(d => d.kind === 'audioinput');
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
+
+        if (inSel) {
+          inSel.innerHTML = '';
+          inputs.forEach((d, i) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Mikrofon ${i + 1}`;
+            if ((selectedInputDeviceId && d.deviceId === selectedInputDeviceId) || (!selectedInputDeviceId && i === 0)) opt.selected = true;
+            inSel.appendChild(opt);
+          });
+          if (!selectedInputDeviceId && inputs[0]) selectedInputDeviceId = inputs[0].deviceId;
+        }
+
+        if (outSel) {
+          outSel.innerHTML = '';
+          outputs.forEach((d, i) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || `Ausgabe ${i + 1}`;
+            if ((selectedOutputDeviceId && d.deviceId === selectedOutputDeviceId) || (!selectedOutputDeviceId && i === 0)) opt.selected = true;
+            outSel.appendChild(opt);
+          });
+          if (!selectedOutputDeviceId && outputs[0]) selectedOutputDeviceId = outputs[0].deviceId;
+        }
+
+        if (hint) hint.textContent = `Inputs: ${inputs.length} · Outputs: ${outputs.length}`;
+      } catch (e) {
+        console.error('enumerateDevices error', e);
+        if (hint) hint.textContent = 'Audio-Devices konnten nicht gelesen werden.';
+      }
+    }
+
+    window.refreshAudioDevices = refreshAudioDevices;
 
     function startMicLevelMonitor() {
       if (!micAnalyser || !isListening) return;
@@ -891,6 +958,7 @@
     ttsStatus.onclick = async () => {
       audioEnabled = true;
       const micOk = await ensureMicrophoneReady();
+      await refreshAudioDevices();
       ttsStatus.textContent = micOk ? '✓ Audio + Mic aktiviert' : '✓ Audio aktiviert (Mic fehlt)';
     };
 
@@ -925,9 +993,13 @@
       
       const audioUrl = '/audio/' + filename;
       const audio = new Audio(audioUrl);
+      activeAudioElement = audio;
       audio.crossOrigin = 'anonymous'; // Required for Web Audio API
       audio.muted = false;
       audio.volume = 1.0;
+      if (selectedOutputDeviceId && typeof audio.setSinkId === 'function') {
+        audio.setSinkId(selectedOutputDeviceId).catch((err) => console.warn('setSinkId failed', err));
+      }
       
       audio.onended = () => {
         ttsStatus.textContent = '✓ Fertig';
@@ -1100,6 +1172,20 @@
       }
     });
 
+    document.getElementById('audio-input-select')?.addEventListener('change', async (e) => {
+      selectedInputDeviceId = e.target.value;
+      if (audioEnabled) await ensureMicrophoneReady();
+    });
+
+    document.getElementById('audio-output-select')?.addEventListener('change', (e) => {
+      selectedOutputDeviceId = e.target.value;
+      if (activeAudioElement && typeof activeAudioElement.setSinkId === 'function') {
+        activeAudioElement.setSinkId(selectedOutputDeviceId).catch((err) => {
+          console.warn('setSinkId failed', err);
+        });
+      }
+    });
+
     const holdBtn = document.getElementById('btn-hold-to-speak');
     if (holdBtn) {
       holdBtn.addEventListener('pointerdown', (e) => {
@@ -1121,6 +1207,8 @@
         stopVoiceInput();
       }, { passive: false });
     }
+
+    refreshAudioDevices();
 
     // Keyboard controls for quick face testing
     window.addEventListener('keydown', (e) => {
