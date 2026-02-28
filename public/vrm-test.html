@@ -12,7 +12,7 @@
       color: white;
       overflow: hidden;
     }
-    #container { width: 100vw; height: 100vh; }
+    #container { width: 100vw; height: 100vh; touch-action: none; }
     #status {
       position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.8); padding: 12px 24px; border-radius: 8px;
@@ -66,6 +66,68 @@
     }
     .face-btn:hover { background: rgba(255,255,255,0.1); color: white; }
     .face-btn:active { background: rgba(68,170,68,0.3); }
+
+    /* Mobile optimization */
+    @media (max-width: 900px) {
+      #container { width: 100vw; height: 100dvh; }
+
+      #status {
+        top: max(10px, env(safe-area-inset-top));
+        width: calc(100vw - 24px);
+        max-width: 540px;
+        padding: 10px 12px;
+        font-size: 13px;
+        text-align: center;
+      }
+
+      #loading {
+        bottom: max(10px, env(safe-area-inset-bottom));
+        font-size: 11px;
+      }
+
+      #menu-toggle {
+        top: max(12px, env(safe-area-inset-top));
+        right: max(12px, env(safe-area-inset-right));
+        width: 52px;
+        height: 52px;
+        background: rgba(0,0,0,0.9);
+      }
+
+      #side-menu {
+        width: min(92vw, 420px);
+        right: -100vw;
+        padding: calc(72px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+      }
+
+      .menu-section h3 { font-size: 11px; }
+
+      .menu-btn {
+        min-height: 46px;
+        font-size: 15px;
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+
+      .face-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+      .face-btn {
+        min-height: 44px;
+        font-size: 13px;
+        border-radius: 9px;
+      }
+
+      #speak-input {
+        min-height: 96px !important;
+        font-size: 16px !important; /* prevent iOS zoom */
+      }
+
+      #webcam {
+        width: 120px !important;
+        height: 90px !important;
+        bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        left: calc(12px + env(safe-area-inset-left)) !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -74,7 +136,7 @@
   <div id="container"></div>
   
   <!-- Menu Toggle -->
-  <div id="menu-toggle" onclick="document.getElementById('side-menu').classList.toggle('open')">
+  <div id="menu-toggle" onclick="toggleMenu()">
     <span></span><span></span><span></span>
   </div>
   
@@ -155,6 +217,8 @@
 
     const statusEl = document.getElementById('status');
     const loadingEl = document.getElementById('loading');
+    const sideMenuEl = document.getElementById('side-menu');
+    const menuToggleEl = document.getElementById('menu-toggle');
     
     function setStatus(msg, type = 'info') {
       statusEl.textContent = msg;
@@ -276,6 +340,24 @@
     window.toggleStats = toggleStats;
     window.toggleRig = toggleRig;
     window.toggleWebcam = toggleWebcam;
+
+    window.toggleMenu = function() {
+      sideMenuEl.classList.toggle('open');
+    };
+
+    function closeMenuOnMobile() {
+      if (window.matchMedia('(max-width: 900px)').matches) {
+        sideMenuEl.classList.remove('open');
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const clickedInsideMenu = sideMenuEl.contains(e.target);
+      const clickedToggle = menuToggleEl.contains(e.target);
+      if (!clickedInsideMenu && !clickedToggle) {
+        sideMenuEl.classList.remove('open');
+      }
+    });
     
     // Global loaders for animation loading
     window.gltfLoader = new GLTFLoader();
@@ -494,6 +576,7 @@
       const btnId = 'btn-' + name;
       const btn = document.getElementById(btnId);
       if (btn) btn.classList.add('active');
+      closeMenuOnMobile();
       
       // Update current animation tracking
       currentAnimation = name;
@@ -750,6 +833,7 @@
       if (!text) return;
       window.speakText(text);
       input.value = '';
+      closeMenuOnMobile();
     };
 
     function updateVoiceButton() {
@@ -782,6 +866,7 @@
         isListening = true;
         updateVoiceButton();
         ttsStatus.textContent = '🎙️ Ich höre zu...';
+        closeMenuOnMobile();
       };
 
       voiceRecognition.onresult = (event) => {
