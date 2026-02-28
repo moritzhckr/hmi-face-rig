@@ -621,6 +621,18 @@
       ttsStatus.textContent = '✓ Audio aktiviert';
     };
 
+    function derivePerformanceFromText(text = '') {
+      const t = text.toLowerCase();
+      const hasQuestion = t.includes('?') || /\b(wie|was|warum|wann|wo)\b/.test(t);
+      const positive = /\b(super|nice|perfekt|cool|geil|stark|yes|top)\b/.test(t);
+      const empathic = /\b(sorry|tut mir leid|schade|verstehe|fühl)\b/.test(t);
+
+      if (positive) return { animation: 'talking', face: 'happy', intensity: 0.45 };
+      if (empathic) return { animation: 'idle', face: 'sad', intensity: 0.25 };
+      if (hasQuestion) return { animation: 'talking', face: 'surprised', intensity: 0.25 };
+      return { animation: 'talking', face: null, intensity: 0 };
+    }
+
     function playAudioFile(text, filename, queueId = null) {
       if (!filename || isSpeaking || !audioEnabled) {
         if (!audioEnabled) ttsStatus.textContent = 'Klick für Audio aktivieren!';
@@ -631,6 +643,12 @@
       currentQueueId = queueId;
       reportPlaybackEvent('playback.start', { file: filename, text });
       ttsStatus.textContent = '🔊 Spiele: ' + text.substring(0, 30);
+
+      const performance = derivePerformanceFromText(text);
+      if (performance.animation) setAnimation(performance.animation);
+      if (performance.face && currentVRM?.expressionManager) {
+        currentVRM.expressionManager.setValue(performance.face, performance.intensity);
+      }
       
       const audioUrl = '/audio/' + filename;
       const audio = new Audio(audioUrl);
@@ -640,6 +658,10 @@
         ttsStatus.textContent = '✓ Fertig';
         reportPlaybackEvent('playback.end', { file: filename, text });
         resetMouth();
+        ['happy', 'sad', 'angry', 'surprised'].forEach(expr => {
+          if (currentVRM?.expressionManager) currentVRM.expressionManager.setValue(expr, 0);
+        });
+        setAnimation('idle');
         currentQueueId = null;
         lastText = '';
       };
@@ -648,6 +670,10 @@
         console.error('Audio Error:', e);
         ttsStatus.textContent = '✗ Fehler';
         reportPlaybackEvent('playback.error', { file: filename, text, detail: String(e?.message || 'audio error') });
+        ['happy', 'sad', 'angry', 'surprised'].forEach(expr => {
+          if (currentVRM?.expressionManager) currentVRM.expressionManager.setValue(expr, 0);
+        });
+        setAnimation('idle');
         isSpeaking = false;
         currentQueueId = null;
       };
@@ -657,6 +683,10 @@
       }).catch(e => {
         console.error('Play Error:', e);
         reportPlaybackEvent('playback.error', { file: filename, text, detail: String(e?.message || 'play error') });
+        ['happy', 'sad', 'angry', 'surprised'].forEach(expr => {
+          if (currentVRM?.expressionManager) currentVRM.expressionManager.setValue(expr, 0);
+        });
+        setAnimation('idle');
         isSpeaking = false;
         currentQueueId = null;
       });
