@@ -110,6 +110,7 @@
       <h3>Avatar Speak (WebUI)</h3>
       <textarea id="speak-input" placeholder="Text eingeben..." style="width:100%;min-height:74px;background:rgba(255,255,255,0.05);border:1px solid #333;border-radius:8px;color:white;padding:10px;font-size:13px;resize:vertical;"></textarea>
       <button class="menu-btn" id="btn-speak" style="margin-top:8px;text-align:center;" onclick="submitSpeak()">🎤 Senden an Avatar</button>
+      <button class="menu-btn" id="btn-voice-input" style="text-align:center;" onclick="toggleVoiceInput()">🗣️ Sprach-Eingabe starten</button>
       <div style="font-size:11px;color:#777;margin-top:6px;">Enter = senden · Shift+Enter = Zeilenumbruch</div>
     </div>
 
@@ -622,6 +623,8 @@
     document.body.appendChild(ttsStatus);
     
     let audioEnabled = false;
+    let voiceRecognition = null;
+    let isListening = false;
     ttsStatus.style.cursor = 'pointer';
     ttsStatus.onclick = () => {
       audioEnabled = true;
@@ -747,6 +750,65 @@
       if (!text) return;
       window.speakText(text);
       input.value = '';
+    };
+
+    function updateVoiceButton() {
+      const btn = document.getElementById('btn-voice-input');
+      if (!btn) return;
+      btn.classList.toggle('active', isListening);
+      btn.textContent = isListening ? '🛑 Sprach-Eingabe stoppen' : '🗣️ Sprach-Eingabe starten';
+    }
+
+    window.toggleVoiceInput = function() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const input = document.getElementById('speak-input');
+
+      if (!SR) {
+        ttsStatus.textContent = '✗ SpeechRecognition nicht unterstützt';
+        return;
+      }
+
+      if (isListening && voiceRecognition) {
+        voiceRecognition.stop();
+        return;
+      }
+
+      voiceRecognition = new SR();
+      voiceRecognition.lang = 'de-DE';
+      voiceRecognition.interimResults = true;
+      voiceRecognition.continuous = false;
+
+      voiceRecognition.onstart = () => {
+        isListening = true;
+        updateVoiceButton();
+        ttsStatus.textContent = '🎙️ Ich höre zu...';
+      };
+
+      voiceRecognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (input) input.value = transcript.trim();
+      };
+
+      voiceRecognition.onerror = (event) => {
+        ttsStatus.textContent = `✗ Mic Fehler: ${event.error}`;
+      };
+
+      voiceRecognition.onend = () => {
+        isListening = false;
+        updateVoiceButton();
+        const text = input?.value?.trim() || '';
+        if (text) {
+          ttsStatus.textContent = '🧠 Verarbeitet Spracheingabe...';
+          window.submitSpeak();
+        } else {
+          ttsStatus.textContent = '✓ Spracheingabe beendet';
+        }
+      };
+
+      voiceRecognition.start();
     };
 
     document.getElementById('speak-input')?.addEventListener('keydown', (e) => {
