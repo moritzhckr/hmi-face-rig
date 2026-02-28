@@ -38,6 +38,22 @@ const server = http.createServer((req, res) => {
 
   let filePath = req.url === '/' ? '/index.html' : req.url;
 
+  // Animation list API (auto-discovery for WebUI)
+  if (req.method === 'GET' && req.url === '/animations/list') {
+    const animDir = path.join(PUBLIC_DIR, 'animations');
+    try {
+      const files = fs.readdirSync(animDir)
+        .filter((f) => /\.(fbx|glb|gltf)$/i.test(f))
+        .sort((a, b) => a.localeCompare(b));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files }));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files: [], error: error.message }));
+    }
+    return;
+  }
+
   // Queue API: fetch next item (or inspect queue)
   if (req.method === 'GET' && req.url.startsWith('/audio/queue')) {
     const url = new URL(req.url, `http://localhost:${PORT}`);

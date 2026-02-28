@@ -198,6 +198,7 @@
       <button class="menu-btn" id="btn-praying" onclick="setAnimation('praying')">🙏 Praying</button>
       <button class="menu-btn" id="btn-arguing" onclick="setAnimation('arguing')">😠 Arguing</button>
       <button class="menu-btn" id="btn-talking" onclick="setAnimation('talking')">💬 Talking</button>
+      <div id="extra-animations"></div>
     </div>
     
     <div class="menu-section">
@@ -457,14 +458,58 @@
 
         // Load all animations
         const animFiles = {
-          'idle': { url: '/animations/Idle.fbx', type: 'fbx' },
-          'armStretch': { url: '/animations/arm_stretching.fbx', type: 'fbx' },
-          'defeated': { url: '/animations/defeated.fbx', type: 'fbx' },
-          'hipHop': { url: '/animations/hip_hop_dancing.fbx', type: 'fbx' },
-          'praying': { url: '/animations/praying.fbx', type: 'fbx' },
-          'arguing': { url: '/animations/standing_arguing.fbx', type: 'fbx' },
-          'talking': { url: '/animations/talking.fbx', type: 'fbx' }
+          'idle': { url: '/animations/Idle.fbx', type: 'fbx', label: '🧍 Idle' },
+          'armStretch': { url: '/animations/arm_stretching.fbx', type: 'fbx', label: '💪 Arm Stretching' },
+          'defeated': { url: '/animations/defeated.fbx', type: 'fbx', label: '😞 Defeated' },
+          'hipHop': { url: '/animations/hip_hop_dancing.fbx', type: 'fbx', label: '🕺 Hip Hop' },
+          'praying': { url: '/animations/praying.fbx', type: 'fbx', label: '🙏 Praying' },
+          'arguing': { url: '/animations/standing_arguing.fbx', type: 'fbx', label: '😠 Arguing' },
+          'talking': { url: '/animations/talking.fbx', type: 'fbx', label: '💬 Talking' }
         };
+
+        function toAnimKey(file) {
+          return file.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        }
+
+        function toAnimLabel(file) {
+          const base = file.replace(/\.[^.]+$/, '');
+          return `✨ ${base.replace(/[_-]+/g, ' ')}`;
+        }
+
+        async function discoverExtraAnimations() {
+          try {
+            const res = await fetch('/animations/list');
+            const data = await res.json();
+            const files = data?.files || [];
+            const knownUrls = new Set(Object.values(animFiles).map(v => v.url.toLowerCase()));
+            files.forEach((file) => {
+              const lower = file.toLowerCase();
+              const url = `/animations/${file}`;
+              if (knownUrls.has(url.toLowerCase())) return;
+              if (!(lower.endsWith('.fbx') || lower.endsWith('.glb') || lower.endsWith('.gltf'))) return;
+              const key = toAnimKey(file);
+              animFiles[key] = { url, type: lower.endsWith('.fbx') ? 'fbx' : 'gltf', label: toAnimLabel(file), extra: true };
+            });
+          } catch (e) {
+            console.warn('Animation discovery failed', e);
+          }
+        }
+
+        function renderExtraAnimationButtons() {
+          const extraContainer = document.getElementById('extra-animations');
+          if (!extraContainer) return;
+          extraContainer.innerHTML = '';
+          Object.entries(animFiles)
+            .filter(([, cfg]) => cfg.extra)
+            .forEach(([name, cfg]) => {
+              const btn = document.createElement('button');
+              btn.className = 'menu-btn';
+              btn.id = `btn-${name}`;
+              btn.textContent = cfg.label;
+              btn.onclick = () => setAnimation(name);
+              extraContainer.appendChild(btn);
+            });
+        }
         
         // Helper to load based on type
         async function loadAnimation(name, config) {
@@ -479,18 +524,21 @@
           }
           return null;
         }
-        
-        const loadPromises = Object.entries(animFiles).map(([name, config]) => {
-          return loadAnimation(name, config).then(clip => {
-            if (clip) animations[name] = clip;
-          }).catch(e => console.error('Error loading', name, e));
-        });
-        
-        Promise.all(loadPromises).then(() => {
-          console.log('All animations loaded');
-          loadingEl.textContent = '';  // Hide loading
-          setAnimation('idle'); // Default animation
-          setStatus('✓ Alles geladen!', 'success');
+
+        discoverExtraAnimations().then(() => {
+          renderExtraAnimationButtons();
+          const loadPromises = Object.entries(animFiles).map(([name, config]) => {
+            return loadAnimation(name, config).then(clip => {
+              if (clip) animations[name] = clip;
+            }).catch(e => console.error('Error loading', name, e));
+          });
+
+          Promise.all(loadPromises).then(() => {
+            console.log('All animations loaded');
+            loadingEl.textContent = '';  // Hide loading
+            setAnimation('idle'); // Default animation
+            setStatus(`✓ Alles geladen! (${Object.keys(animations).length} Clips)`, 'success');
+          });
         });
       },
       (progress) => {
