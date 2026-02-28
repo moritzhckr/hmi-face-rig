@@ -835,10 +835,63 @@
     let audioEnabled = false;
     let voiceRecognition = null;
     let isListening = false;
+    let micStream = null;
+    let micAnalyser = null;
+    let micData = null;
+    let micLevelRAF = null;
+
+    async function ensureMicrophoneReady() {
+      if (micStream) return true;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        ttsStatus.textContent = '✗ Browser unterstützt kein getUserMedia';
+        return false;
+      }
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const ctx = getAudioContext();
+        const source = ctx.audioContext.createMediaStreamSource(micStream);
+        micAnalyser = ctx.audioContext.createAnalyser();
+        micAnalyser.fftSize = 1024;
+        micData = new Uint8Array(micAnalyser.frequencyBinCount);
+        source.connect(micAnalyser);
+        return true;
+      } catch (e) {
+        console.error('Mic permission error:', e);
+        ttsStatus.textContent = '✗ Bitte Mikrofon im Browser erlauben';
+        return false;
+      }
+    }
+
+    function startMicLevelMonitor() {
+      if (!micAnalyser || !isListening) return;
+      const tick = () => {
+        if (!isListening || !micAnalyser) return;
+        micAnalyser.getByteTimeDomainData(micData);
+        let sum = 0;
+        for (let i = 0; i < micData.length; i++) {
+          const v = (micData[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / micData.length);
+        const level = Math.min(100, Math.round(rms * 220));
+        ttsStatus.textContent = `🎙️ Halten & sprechen... (${level}%)`;
+        micLevelRAF = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    function stopMicLevelMonitor() {
+      if (micLevelRAF) {
+        cancelAnimationFrame(micLevelRAF);
+        micLevelRAF = null;
+      }
+    }
+
     ttsStatus.style.cursor = 'pointer';
-    ttsStatus.onclick = () => {
+    ttsStatus.onclick = async () => {
       audioEnabled = true;
-      ttsStatus.textContent = '✓ Audio aktiviert';
+      const micOk = await ensureMicrophoneReady();
+      ttsStatus.textContent = micOk ? '✓ Audio + Mic aktiviert' : '✓ Audio aktiviert (Mic fehlt)';
     };
 
     function derivePerformanceFromText(text = '') {
@@ -972,7 +1025,7 @@
       btn.textContent = isListening ? '🔴 Aufnahme läuft...' : '🗣️ Hold to Speak';
     }
 
-    function startVoiceInput() {
+    async function startVoiceInput() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       const input = document.getElementById('speak-input');
 
@@ -981,6 +1034,9 @@
         return;
       }
       if (isListening) return;
+
+      const micOk = await ensureMicrophoneReady();
+      if (!micOk) return;
 
       voiceRecognition = new SR();
       voiceRecognition.lang = 'de-DE';
@@ -991,6 +1047,7 @@
         isListening = true;
         updateHoldButton();
         ttsStatus.textContent = '🎙️ Halten & sprechen...';
+        startMicLevelMonitor();
       };
 
       voiceRecognition.onresult = (event) => {
@@ -1002,12 +1059,14 @@
       };
 
       voiceRecognition.onerror = (event) => {
+        stopMicLevelMonitor();
         ttsStatus.textContent = `✗ Mic Fehler: ${event.error}`;
       };
 
       voiceRecognition.onend = () => {
         const wasListening = isListening;
         isListening = false;
+        stopMicLevelMonitor();
         updateHoldButton();
         if (!wasListening) return;
         const text = input?.value?.trim() || '';
