@@ -67,6 +67,37 @@
     .face-btn:hover { background: rgba(255,255,255,0.1); color: white; }
     .face-btn:active { background: rgba(68,170,68,0.3); }
 
+    /* Center speech panel */
+    #speech-panel {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      z-index: 220;
+      width: min(92vw, 560px);
+      background: rgba(12, 12, 20, 0.86);
+      border: 1px solid #3a3a4a;
+      border-radius: 14px;
+      padding: 10px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+    #speak-input {
+      width: 100%; min-height: 68px;
+      background: rgba(255,255,255,0.06); border: 1px solid #333;
+      border-radius: 10px; color: white; padding: 10px;
+      font-size: 14px; resize: vertical;
+    }
+    #speech-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .speech-btn {
+      min-height: 44px; border-radius: 10px; border: 1px solid #3d3d4a;
+      background: rgba(255,255,255,0.08); color: white; cursor: pointer;
+      font-size: 14px;
+    }
+    .speech-btn:active { transform: scale(0.99); }
+    #btn-hold-to-speak.active { background: rgba(80, 30, 30, 0.9); border-color: #d55; color: #fff; }
+    #speech-hint { font-size: 11px; color: #8f8f9c; margin-top: 6px; text-align: center; }
+
     /* Mobile optimization */
     @media (max-width: 900px) {
       #container { width: 100vw; height: 100dvh; }
@@ -116,6 +147,12 @@
         border-radius: 9px;
       }
 
+      #speech-panel {
+        width: min(96vw, 620px);
+        bottom: calc(10px + env(safe-area-inset-bottom));
+        padding: 10px;
+      }
+
       #speak-input {
         min-height: 96px !important;
         font-size: 16px !important; /* prevent iOS zoom */
@@ -134,6 +171,16 @@
   <div id="status">Initializing...</div>
   <div id="loading"></div>
   <div id="container"></div>
+
+  <!-- Centered speech controls -->
+  <div id="speech-panel">
+    <textarea id="speak-input" placeholder="Schreib etwas oder halte den Mic-Button..." autocomplete="off"></textarea>
+    <div id="speech-actions">
+      <button class="speech-btn" id="btn-speak" onclick="submitSpeak()">🎤 Senden</button>
+      <button class="speech-btn" id="btn-hold-to-speak">🗣️ Hold to Speak</button>
+    </div>
+    <div id="speech-hint">Enter = senden · Mic gedrückt halten zum Sprechen</div>
+  </div>
   
   <!-- Menu Toggle -->
   <div id="menu-toggle" onclick="toggleMenu()">
@@ -168,13 +215,7 @@
       </div>
     </div>
     
-    <div class="menu-section">
-      <h3>Avatar Speak (WebUI)</h3>
-      <textarea id="speak-input" placeholder="Text eingeben..." style="width:100%;min-height:74px;background:rgba(255,255,255,0.05);border:1px solid #333;border-radius:8px;color:white;padding:10px;font-size:13px;resize:vertical;"></textarea>
-      <button class="menu-btn" id="btn-speak" style="margin-top:8px;text-align:center;" onclick="submitSpeak()">🎤 Senden an Avatar</button>
-      <button class="menu-btn" id="btn-voice-input" style="text-align:center;" onclick="toggleVoiceInput()">🗣️ Sprach-Eingabe starten</button>
-      <div style="font-size:11px;color:#777;margin-top:6px;">Enter = senden · Shift+Enter = Zeilenumbruch</div>
-    </div>
+    <!-- speech controls moved to centered overlay -->
 
     <div class="menu-section">
       <h3>Info</h3>
@@ -836,14 +877,14 @@
       closeMenuOnMobile();
     };
 
-    function updateVoiceButton() {
-      const btn = document.getElementById('btn-voice-input');
+    function updateHoldButton() {
+      const btn = document.getElementById('btn-hold-to-speak');
       if (!btn) return;
       btn.classList.toggle('active', isListening);
-      btn.textContent = isListening ? '🛑 Sprach-Eingabe stoppen' : '🗣️ Sprach-Eingabe starten';
+      btn.textContent = isListening ? '🔴 Aufnahme läuft...' : '🗣️ Hold to Speak';
     }
 
-    window.toggleVoiceInput = function() {
+    function startVoiceInput() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       const input = document.getElementById('speak-input');
 
@@ -851,22 +892,17 @@
         ttsStatus.textContent = '✗ SpeechRecognition nicht unterstützt';
         return;
       }
-
-      if (isListening && voiceRecognition) {
-        voiceRecognition.stop();
-        return;
-      }
+      if (isListening) return;
 
       voiceRecognition = new SR();
       voiceRecognition.lang = 'de-DE';
       voiceRecognition.interimResults = true;
-      voiceRecognition.continuous = false;
+      voiceRecognition.continuous = true;
 
       voiceRecognition.onstart = () => {
         isListening = true;
-        updateVoiceButton();
-        ttsStatus.textContent = '🎙️ Ich höre zu...';
-        closeMenuOnMobile();
+        updateHoldButton();
+        ttsStatus.textContent = '🎙️ Halten & sprechen...';
       };
 
       voiceRecognition.onresult = (event) => {
@@ -882,8 +918,10 @@
       };
 
       voiceRecognition.onend = () => {
+        const wasListening = isListening;
         isListening = false;
-        updateVoiceButton();
+        updateHoldButton();
+        if (!wasListening) return;
         const text = input?.value?.trim() || '';
         if (text) {
           ttsStatus.textContent = '🧠 Verarbeitet Spracheingabe...';
@@ -894,7 +932,13 @@
       };
 
       voiceRecognition.start();
-    };
+    }
+
+    function stopVoiceInput() {
+      if (voiceRecognition && isListening) {
+        voiceRecognition.stop();
+      }
+    }
 
     document.getElementById('speak-input')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -902,6 +946,28 @@
         window.submitSpeak();
       }
     });
+
+    const holdBtn = document.getElementById('btn-hold-to-speak');
+    if (holdBtn) {
+      holdBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startVoiceInput();
+      });
+      holdBtn.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        stopVoiceInput();
+      });
+      holdBtn.addEventListener('pointerleave', () => stopVoiceInput());
+      holdBtn.addEventListener('pointercancel', () => stopVoiceInput());
+      holdBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startVoiceInput();
+      }, { passive: false });
+      holdBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopVoiceInput();
+      }, { passive: false });
+    }
 
     // Keyboard controls for quick face testing
     window.addEventListener('keydown', (e) => {
