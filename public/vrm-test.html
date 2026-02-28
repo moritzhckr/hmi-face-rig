@@ -232,7 +232,8 @@
       <select id="audio-input-select" style="width:100%;min-height:38px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;"></select>
       <div style="font-size:11px;color:#888;margin:8px 0 6px;">Output (Lautsprecher)</div>
       <select id="audio-output-select" style="width:100%;min-height:38px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;"></select>
-      <button class="menu-btn" id="btn-audio-refresh" style="margin-top:8px;text-align:center;" onclick="refreshAudioDevices()">🔄 Audio Devices aktualisieren</button>
+      <button class="menu-btn" id="btn-audio-permission" style="margin-top:8px;text-align:center;" onclick="requestAudioPermission()">🎙️ Mic-Freigabe anfragen</button>
+      <button class="menu-btn" id="btn-audio-refresh" style="text-align:center;" onclick="refreshAudioDevices()">🔄 Audio Devices aktualisieren</button>
       <div id="audio-settings-hint" style="font-size:11px;color:#777;margin-top:6px;">Output-Auswahl klappt je nach Browser unterschiedlich.</div>
     </div>
 
@@ -898,6 +899,12 @@
 
         if (inSel) {
           inSel.innerHTML = '';
+          if (!inputs.length) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Kein Mikro erkannt (erst Freigabe klicken)';
+            inSel.appendChild(opt);
+          }
           inputs.forEach((d, i) => {
             const opt = document.createElement('option');
             opt.value = d.deviceId;
@@ -910,6 +917,12 @@
 
         if (outSel) {
           outSel.innerHTML = '';
+          if (!outputs.length) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Standard Output (Browser)';
+            outSel.appendChild(opt);
+          }
           outputs.forEach((d, i) => {
             const opt = document.createElement('option');
             opt.value = d.deviceId;
@@ -928,6 +941,11 @@
     }
 
     window.refreshAudioDevices = refreshAudioDevices;
+    window.requestAudioPermission = async function() {
+      const ok = await ensureMicrophoneReady();
+      await refreshAudioDevices();
+      ttsStatus.textContent = ok ? '✓ Mic-Freigabe aktiv' : '✗ Mic-Freigabe fehlt';
+    };
 
     function startMicLevelMonitor() {
       if (!micAnalyser || !isListening) return;
