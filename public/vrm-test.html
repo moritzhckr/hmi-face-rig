@@ -179,6 +179,7 @@
       <button class="speech-btn" id="btn-speak" onclick="submitSpeak()">🎤 Senden</button>
       <button class="speech-btn" id="btn-hold-to-speak">🗣️ Hold to Speak</button>
     </div>
+    <button class="speech-btn" id="btn-permission" style="margin-top:8px;width:100%;" onclick="initBrowserPermissions()">🔐 Browser-Zugriff erlauben</button>
     <div id="speech-hint">Enter = senden · Mic gedrückt halten zum Sprechen</div>
   </div>
   
@@ -856,7 +857,7 @@
 
     async function ensureMicrophoneReady() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        ttsStatus.textContent = '✗ Browser unterstützt kein getUserMedia';
+        ttsStatus.textContent = '✗ Mic nicht verfügbar (nutze HTTPS + normalen Browser)';
         return false;
       }
       try {
@@ -879,10 +880,30 @@
         return true;
       } catch (e) {
         console.error('Mic permission error:', e);
-        ttsStatus.textContent = '✗ Bitte Mikrofon im Browser erlauben';
+        const reason = String(e?.name || e?.message || 'unknown');
+        if (reason.includes('NotAllowed')) {
+          ttsStatus.textContent = '✗ Mic blockiert – bitte Browser-Zugriff erlauben';
+        } else if (reason.includes('NotFound')) {
+          ttsStatus.textContent = '✗ Kein Mikrofon gefunden';
+        } else if (reason.includes('Security')) {
+          ttsStatus.textContent = '✗ Mic braucht HTTPS oder localhost';
+        } else {
+          ttsStatus.textContent = `✗ Mic Fehler: ${reason}`;
+        }
         return false;
       }
     }
+
+    window.initBrowserPermissions = async function() {
+      audioEnabled = true;
+      try {
+        const ctx = getAudioContext();
+        if (ctx.audioContext.state === 'suspended') await ctx.audioContext.resume();
+      } catch (_) {}
+      const micOk = await ensureMicrophoneReady();
+      await refreshAudioDevices();
+      ttsStatus.textContent = micOk ? '✓ Browser-Zugriff aktiv (Audio + Mic)' : ttsStatus.textContent;
+    };
 
     async function refreshAudioDevices() {
       const inSel = document.getElementById('audio-input-select');
@@ -974,10 +995,7 @@
 
     ttsStatus.style.cursor = 'pointer';
     ttsStatus.onclick = async () => {
-      audioEnabled = true;
-      const micOk = await ensureMicrophoneReady();
-      await refreshAudioDevices();
-      ttsStatus.textContent = micOk ? '✓ Audio + Mic aktiviert' : '✓ Audio aktiviert (Mic fehlt)';
+      await window.initBrowserPermissions();
     };
 
     function derivePerformanceFromText(text = '') {
@@ -1124,6 +1142,10 @@
     async function startVoiceInput() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       const input = document.getElementById('speak-input');
+
+      if (!audioEnabled) {
+        await window.initBrowserPermissions();
+      }
 
       if (!SR) {
         ttsStatus.textContent = '✗ SpeechRecognition nicht unterstützt';
