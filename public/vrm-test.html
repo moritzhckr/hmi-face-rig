@@ -695,8 +695,8 @@
       
       // Use AnimationMixer
       const speed = animationSettings[name]?.speed || 1;
-      mixer.timeScale = speed;
       const newAction = mixer.clipAction(clip);
+      newAction.setEffectiveTimeScale(speed);
       
       if (action && action !== newAction) {
         action.crossFadeTo(newAction, 0.3, true);
@@ -926,6 +926,8 @@
       const audioUrl = '/audio/' + filename;
       const audio = new Audio(audioUrl);
       audio.crossOrigin = 'anonymous'; // Required for Web Audio API
+      audio.muted = false;
+      audio.volume = 1.0;
       
       audio.onended = () => {
         ttsStatus.textContent = '✓ Fertig';
@@ -952,7 +954,11 @@
       };
       
       audio.play().then(() => {
-        startLipSyncFromAudio(audio);
+        try {
+          startLipSyncFromAudio(audio);
+        } catch (e) {
+          console.warn('LipSync fallback (audio keeps playing):', e);
+        }
       }).catch(e => {
         console.error('Play Error:', e);
         reportPlaybackEvent('playback.error', { file: filename, text, detail: String(e?.message || 'play error') });
