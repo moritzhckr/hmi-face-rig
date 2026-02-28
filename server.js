@@ -40,21 +40,43 @@ const server = http.createServer((req, res) => {
   let filePath = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
 
   // VRM model list API (for model switcher UI)
-  if (req.method === 'GET' && req.url === '/vrm/list') {
+  if (req.method === 'GET' && requestUrl.pathname === '/vrm/list') {
     try {
-      const candidates = [];
       const rootFiles = fs.readdirSync(PUBLIC_DIR)
         .filter((f) => /\.vrm$/i.test(f))
-        .map((f) => `/` + f);
+        .map((f) => '/' + f);
 
       const vrmDir = path.join(PUBLIC_DIR, 'vrm');
       const nestedFiles = fs.existsSync(vrmDir)
-        ? fs.readdirSync(vrmDir).filter((f) => /\.vrm$/i.test(f)).map((f) => `/vrm/` + f)
+        ? fs.readdirSync(vrmDir).filter((f) => /\.vrm$/i.test(f)).map((f) => '/vrm/' + f)
         : [];
 
-      const dedup = Array.from(new Set([...rootFiles, ...nestedFiles])).sort((a, b) => a.localeCompare(b));
+      const all = [...rootFiles, ...nestedFiles];
+
+      // Deduplicate by file size first (user requested), keep best canonical path.
+      const bySize = new Map();
+      const rankPath = (p) => {
+        if (p.includes('Alicia') || p.includes('Constraint')) return 0;
+        if (p.startsWith('/vrm/')) return 1;
+        return 2;
+      };
+
+      all.forEach((webPath) => {
+        const abs = path.join(PUBLIC_DIR, webPath.replace(/^\//, ''));
+        const stat = fs.statSync(abs);
+        const sizeKey = String(stat.size);
+        const existing = bySize.get(sizeKey);
+        if (!existing || rankPath(webPath) < rankPath(existing.path)) {
+          bySize.set(sizeKey, { path: webPath, size: stat.size });
+        }
+      });
+
+      const files = Array.from(bySize.values())
+        .map((x) => x.path)
+        .sort((a, b) => a.localeCompare(b));
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ files: dedup }));
+      res.end(JSON.stringify({ files }));
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ files: [], error: error.message }));

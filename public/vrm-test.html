@@ -630,8 +630,10 @@
       if (currentVRM?.expressionManager) {
         idleTime += delta;
         
-        // Breathing
-        currentVRM.expressionManager.setValue('aa', Math.max(0, Math.sin(idleTime * 2) * 0.08 + 0.12));
+        // Breathing only when not speaking (otherwise it fights lip sync)
+        if (!isSpeaking) {
+          setExpressionSafe('aa', Math.max(0, Math.sin(idleTime * 2) * 0.08 + 0.12));
+        }
         
         // Random blink every 3-5 seconds
         if (Math.random() < 0.002) {
@@ -705,6 +707,13 @@
     
     // TTS + Lip Sync
     const mouthShapes = ['aa', 'ih', 'ou', 'ee', 'oh'];
+    const mouthShapeAliases = {
+      aa: ['aa', 'a'],
+      ih: ['ih', 'i'],
+      ou: ['ou', 'u'],
+      ee: ['ee', 'e'],
+      oh: ['oh', 'o']
+    };
     let lipSyncAnimFrame = null;
     let isSpeaking = false;
     let currentQueueId = null;
@@ -731,10 +740,21 @@
       return { audioContext, analyser, audioDataArray };
     }
 
+    function setExpressionSafe(name, value) {
+      if (!currentVRM?.expressionManager) return;
+      try { currentVRM.expressionManager.setValue(name, value); } catch (_) {}
+    }
+
     function setMouth(shape, value = 1.0) {
       if (!currentVRM?.expressionManager) return;
-      mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
-      if (shape) currentVRM.expressionManager.setValue(shape, value);
+      mouthShapes.forEach(s => {
+        const aliases = mouthShapeAliases[s] || [s];
+        aliases.forEach(a => setExpressionSafe(a, 0));
+      });
+      if (shape) {
+        const aliases = mouthShapeAliases[shape] || [shape];
+        aliases.forEach(a => setExpressionSafe(a, value));
+      }
     }
 
     function resetMouth() {
@@ -783,23 +803,20 @@
         // Map frequency bands to mouth shapes
         if (volume < 0.05) {
           // Silence - close mouth
-          mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
+          setMouth(null, 0);
         } else {
-          // Reset all first
-          mouthShapes.forEach(s => currentVRM.expressionManager.setValue(s, 0));
-          
           // Low frequencies → wide open (aa)
           // Mid frequencies → medium open (oh/ou)
           // High frequencies → narrow (ih/ee)
           if (lowN > midN && lowN > highN) {
-            currentVRM.expressionManager.setValue('aa', volume * 0.9);
-            currentVRM.expressionManager.setValue('oh', volume * 0.2);
+            setMouth('aa', volume * 0.9);
+            setExpressionSafe('oh', volume * 0.2);
           } else if (highN > lowN) {
-            currentVRM.expressionManager.setValue('ih', volume * 0.7);
-            currentVRM.expressionManager.setValue('ee', volume * 0.3);
+            setMouth('ih', volume * 0.7);
+            setExpressionSafe('ee', volume * 0.3);
           } else {
-            currentVRM.expressionManager.setValue('oh', volume * 0.6);
-            currentVRM.expressionManager.setValue('ou', volume * 0.4);
+            setMouth('oh', volume * 0.6);
+            setExpressionSafe('ou', volume * 0.4);
           }
         }
         
