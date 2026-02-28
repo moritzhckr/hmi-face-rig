@@ -9,6 +9,21 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 // German voices: de-DE-ConradNeural, de-DE-KlaraNeural
 const DEFAULT_VOICE = 'de-DE-ConradNeural';
 
+// Simple in-memory audio queue + playback event log
+const audioQueue = [];
+const playbackEvents = [];
+const MAX_EVENTS = 200;
+
+function pushPlaybackEvent(type, payload = {}) {
+  playbackEvents.push({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ts: Date.now(), type, ...payload });
+  if (playbackEvents.length > MAX_EVENTS) playbackEvents.splice(0, playbackEvents.length - MAX_EVENTS);
+}
+
+function enqueueAudio(item) {
+  audioQueue.push(item);
+  pushPlaybackEvent('queue.enqueued', { queueId: item.queueId, file: item.file, text: item.text });
+}
+
 const server = http.createServer((req, res) => {
   // CORS for local access
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,6 +37,47 @@ const server = http.createServer((req, res) => {
   }
 
   let filePath = req.url === '/' ? '/index.html' : req.url;
+
+  // Queue API: fetch next item (or inspect queue)
+  if (req.method === 'GET' && req.url.startsWith('/audio/queue')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const consume = url.searchParams.get('consume') === '1';
+    const item = consume ? (audioQueue.shift() || null) : (audioQueue[0] || null);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ item, queueLength: audioQueue.length }));
+    return;
+  }
+
+  // Playback event API: client can post playback lifecycle events
+  if (req.method === 'POST' && req.url === '/audio/events') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const type = data.type || 'unknown';
+        pushPlaybackEvent(type, {
+          queueId: data.queueId,
+          file: data.file,
+          text: data.text,
+          detail: data.detail
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      } catch (error) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Optional diagnostics endpoint
+  if (req.method === 'GET' && req.url === '/audio/events') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ events: playbackEvents.slice(-50), queueLength: audioQueue.length }));
+    return;
+  }
   
   // Handle /tts endpoint - generate Edge TTS audio
   if (req.method === 'POST' && req.url.startsWith('/tts')) {
@@ -47,13 +103,17 @@ const server = http.createServer((req, res) => {
         const tts = new EdgeTTS({ voice: voice });
         await tts.ttsPromise(text, audioPath);
         
-        // Update latest.json with new file
+        // Update latest.json with new file (legacy polling)
         const latestJson = { file: filename, text: text };
         fs.writeFileSync(path.join(audioDir, 'latest.json'), JSON.stringify(latestJson));
+
+        // Also enqueue for queue-driven playback
+        const queueId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        enqueueAudio({ queueId, file: filename, text });
         
         console.log(`✅ TTS generated: ${filename}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, file: filename, text: text }));
+        res.end(JSON.stringify({ success: true, file: filename, text: text, queueId }));
         
       } catch (error) {
         console.error('❌ TTS Error:', error);
