@@ -38,6 +38,29 @@ const server = http.createServer((req, res) => {
 
   let filePath = req.url === '/' ? '/index.html' : req.url;
 
+  // VRM model list API (for model switcher UI)
+  if (req.method === 'GET' && req.url === '/vrm/list') {
+    try {
+      const candidates = [];
+      const rootFiles = fs.readdirSync(PUBLIC_DIR)
+        .filter((f) => /\.vrm$/i.test(f))
+        .map((f) => `/` + f);
+
+      const vrmDir = path.join(PUBLIC_DIR, 'vrm');
+      const nestedFiles = fs.existsSync(vrmDir)
+        ? fs.readdirSync(vrmDir).filter((f) => /\.vrm$/i.test(f)).map((f) => `/vrm/` + f)
+        : [];
+
+      const dedup = Array.from(new Set([...rootFiles, ...nestedFiles])).sort((a, b) => a.localeCompare(b));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files: dedup }));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ files: [], error: error.message }));
+    }
+    return;
+  }
+
   // Animation list API (auto-discovery for WebUI)
   if (req.method === 'GET' && req.url === '/animations/list') {
     const animDir = path.join(PUBLIC_DIR, 'animations');

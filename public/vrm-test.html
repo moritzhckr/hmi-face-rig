@@ -190,6 +190,13 @@
   <!-- Side Menu -->
   <div id="side-menu">
     <div class="menu-section">
+      <h3>VRM Model</h3>
+      <select id="model-select" style="width:100%;min-height:40px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;"></select>
+      <button class="menu-btn" id="btn-apply-model" style="margin-top:8px;text-align:center;" onclick="applyModelSelection()">🧬 Modell laden</button>
+      <div style="font-size:11px;color:#777;margin-top:6px;">Lädt das gewählte VRM neu</div>
+    </div>
+
+    <div class="menu-section">
       <h3>Body Animation</h3>
       <div id="body-animation-buttons"></div>
     </div>
@@ -381,6 +388,36 @@
       sideMenuEl.classList.toggle('open');
     };
 
+    window.applyModelSelection = function() {
+      const sel = document.getElementById('model-select');
+      const chosen = sel?.value;
+      if (!chosen) return;
+      const p = new URLSearchParams(window.location.search);
+      p.set('model', chosen);
+      window.location.search = p.toString();
+    };
+
+    async function initModelPicker() {
+      const sel = document.getElementById('model-select');
+      if (!sel) return;
+      try {
+        const current = getInitialModelPath();
+        const res = await fetch('/vrm/list');
+        const data = await res.json();
+        const files = data?.files || [];
+        sel.innerHTML = '';
+        files.forEach((f) => {
+          const o = document.createElement('option');
+          o.value = f;
+          o.textContent = f.replace('/vrm/', '').replace('/', '');
+          if (f === current) o.selected = true;
+          sel.appendChild(o);
+        });
+      } catch (e) {
+        console.warn('model list failed', e);
+      }
+    }
+
     function closeMenuOnMobile() {
       if (window.matchMedia('(max-width: 900px)').matches) {
         sideMenuEl.classList.remove('open');
@@ -401,9 +438,16 @@
     window.fbxLoader = new FBXLoader();
     
     // Load VRM
+    function getInitialModelPath() {
+      const p = new URLSearchParams(window.location.search);
+      const model = p.get('model');
+      if (model && model.startsWith('/')) return model;
+      return '/vrm/test.vrm';
+    }
+
     setStatus('Loading VRM...', 'info');
-    
     const loader = window.gltfLoader;
+    const initialModelPath = getInitialModelPath();
     
     // IMPORTANT: Register VRMLoaderPlugin with autoUpdateHumanBones
     loader.register((parser) => {
@@ -413,8 +457,10 @@
       });
     });
 
+    initModelPicker();
+
     loader.load(
-      '/vrm/test.vrm',
+      initialModelPath,
       (gltf) => {
         const vrm = gltf.userData.vrm;
         if (!vrm) {
