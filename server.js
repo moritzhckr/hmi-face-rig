@@ -24,6 +24,41 @@ function enqueueAudio(item) {
   pushPlaybackEvent('queue.enqueued', { queueId: item.queueId, file: item.file, text: item.text });
 }
 
+function classifyIntentEmotion(text = '') {
+  const t = String(text).toLowerCase();
+  const intent = t.includes('?') ? 'question' : /\b(mach|tu|bitte|setze|öffne|starte)\b/.test(t) ? 'request' : 'statement';
+  const emotion = /\b(super|cool|nice|danke|geil|top)\b/.test(t)
+    ? 'positive'
+    : /\b(schade|problem|hilfe|sorry|traurig)\b/.test(t)
+      ? 'supportive'
+      : 'neutral';
+  return { intent, emotion };
+}
+
+function generateAssistantReply(prompt, cls) {
+  const clean = String(prompt || '').trim();
+  if (!clean) return 'Ich habe nichts verstanden. Sag mir kurz, was ich tun soll.';
+  if (cls.intent === 'question') return `Gute Frage. Kurz gesagt: ${clean} — ich prüfe das und gebe dir direkt eine klare Antwort.`;
+  if (cls.intent === 'request') return `Alles klar, ich setze das für dich um: ${clean}.`;
+  return `Verstanden: ${clean}. Ich bin dran.`;
+}
+
+async function generateAndQueueTTS(text, voice = DEFAULT_VOICE) {
+  const filename = `tts_${Date.now()}.mp3`;
+  const audioDir = path.join(PUBLIC_DIR, 'audio');
+  if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+  const audioPath = path.join(audioDir, filename);
+
+  const tts = new EdgeTTS({ voice });
+  await tts.ttsPromise(text, audioPath);
+
+  fs.writeFileSync(path.join(audioDir, 'latest.json'), JSON.stringify({ file: filename, text }));
+  const queueId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  enqueueAudio({ queueId, file: filename, text });
+
+  return { file: filename, text, queueId };
+}
+
 const server = http.createServer((req, res) => {
   // CORS for local access
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -141,42 +176,48 @@ const server = http.createServer((req, res) => {
     return;
   }
   
-  // Handle /tts endpoint - generate Edge TTS audio
-  if (req.method === 'POST' && req.url.startsWith('/tts')) {
+  // Handle /chat endpoint - prompt -> assistant reply -> TTS queue
+  if (req.method === 'POST' && requestUrl.pathname === '/chat') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       try {
-        const data = JSON.parse(body);
+        const data = JSON.parse(body || '{}');
+        const prompt = data.prompt || data.text || '';
+        const voice = data.voice || DEFAULT_VOICE;
+
+        const classification = classifyIntentEmotion(prompt);
+        const reply = generateAssistantReply(prompt, classification);
+        const ttsOut = await generateAndQueueTTS(reply, voice);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, prompt, reply, classification, ...ttsOut }));
+      } catch (error) {
+        console.error('❌ Chat Error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Handle /tts endpoint - generate Edge TTS audio
+  if (req.method === 'POST' && requestUrl.pathname === '/tts') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body || '{}');
         const text = data.text || 'Hallo!';
         const voice = data.voice || DEFAULT_VOICE;
-        
-        // Generate unique filename
-        const filename = `tts_${Date.now()}.mp3`;
-        const audioPath = path.join(PUBLIC_DIR, 'audio', filename);
-        
-        // Create audio directory if needed
-        const audioDir = path.join(PUBLIC_DIR, 'audio');
-        if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
-        
-        // Generate TTS audio
-        console.log(`🎤 Generating TTS: "${text}" with voice ${voice}`);
-        
-        const tts = new EdgeTTS({ voice: voice });
-        await tts.ttsPromise(text, audioPath);
-        
-        // Update latest.json with new file (legacy polling)
-        const latestJson = { file: filename, text: text };
-        fs.writeFileSync(path.join(audioDir, 'latest.json'), JSON.stringify(latestJson));
 
-        // Also enqueue for queue-driven playback
-        const queueId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        enqueueAudio({ queueId, file: filename, text });
-        
-        console.log(`✅ TTS generated: ${filename}`);
+        console.log(`🎤 Generating TTS: "${text}" with voice ${voice}`);
+        const ttsOut = await generateAndQueueTTS(text, voice);
+
+        console.log(`✅ TTS generated: ${ttsOut.file}`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, file: filename, text: text, queueId }));
-        
+        res.end(JSON.stringify({ success: true, ...ttsOut }));
+
       } catch (error) {
         console.error('❌ TTS Error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });

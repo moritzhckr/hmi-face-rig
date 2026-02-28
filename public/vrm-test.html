@@ -930,26 +930,27 @@
 
     setInterval(pollForTTS, 1000);
     
-    // /speak command handler
+    // Speak pipeline: user prompt -> assistant reply -> queued avatar speech
     window.speakText = function(text) {
       if (!text || text.trim() === '' || isSpeaking) return;
-      
-      ttsStatus.textContent = '🔄 Generiere...';
-      
-      fetch('/tts', {
+
+      ttsStatus.textContent = '🧠 Denke nach...';
+
+      fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text, voice: 'de-DE-ConradNeural' })
+        body: JSON.stringify({ prompt: text, voice: 'de-DE-ConradNeural' })
       })
       .then(r => r.json())
       .then(data => {
         if (data.success && data.file) {
-          // Playback comes from /audio/queue polling to avoid double-trigger.
-          ttsStatus.textContent = '✅ In Queue';
+          ttsStatus.textContent = '✅ Antwort in Queue';
+        } else {
+          ttsStatus.textContent = '✗ Keine Antwort';
         }
       })
       .catch(e => {
-        console.error('TTS Error:', e);
+        console.error('Chat/TTS Error:', e);
         ttsStatus.textContent = '✗ Fehler';
       });
     };
