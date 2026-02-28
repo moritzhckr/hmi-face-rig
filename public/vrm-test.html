@@ -191,14 +191,7 @@
   <div id="side-menu">
     <div class="menu-section">
       <h3>Body Animation</h3>
-      <button class="menu-btn active" id="btn-idle" onclick="setAnimation('idle')">🧍 Idle</button>
-      <button class="menu-btn" id="btn-armStretch" onclick="setAnimation('armStretch')">💪 Arm Stretching</button>
-      <button class="menu-btn" id="btn-defeated" onclick="setAnimation('defeated')">😞 Defeated</button>
-      <button class="menu-btn" id="btn-hipHop" onclick="setAnimation('hipHop')">🕺 Hip Hop</button>
-      <button class="menu-btn" id="btn-praying" onclick="setAnimation('praying')">🙏 Praying</button>
-      <button class="menu-btn" id="btn-arguing" onclick="setAnimation('arguing')">😠 Arguing</button>
-      <button class="menu-btn" id="btn-talking" onclick="setAnimation('talking')">💬 Talking</button>
-      <div id="extra-animations"></div>
+      <div id="body-animation-buttons"></div>
     </div>
     
     <div class="menu-section">
@@ -314,8 +307,9 @@
     let animationTime = 0;
     let idleClip = null;
     
-    // Animation clips storage
+    // Animation clips + settings storage
     const animations = {};
+    const animationSettings = {};
 
     // Helper root for VRM debugging
     const helperRoot = new THREE.Group();
@@ -456,89 +450,69 @@
 
         console.log('VRM loaded');
 
-        // Load all animations
+        // Curated animations (stable, deduplicated)
         const animFiles = {
-          'idle': { url: '/animations/Idle.fbx', type: 'fbx', label: '🧍 Idle' },
-          'armStretch': { url: '/animations/arm_stretching.fbx', type: 'fbx', label: '💪 Arm Stretching' },
-          'defeated': { url: '/animations/defeated.fbx', type: 'fbx', label: '😞 Defeated' },
-          'hipHop': { url: '/animations/hip_hop_dancing.fbx', type: 'fbx', label: '🕺 Hip Hop' },
-          'praying': { url: '/animations/praying.fbx', type: 'fbx', label: '🙏 Praying' },
-          'arguing': { url: '/animations/standing_arguing.fbx', type: 'fbx', label: '😠 Arguing' },
-          'talking': { url: '/animations/talking.fbx', type: 'fbx', label: '💬 Talking' }
+          'idle': { url: '/animations/Idle.fbx', type: 'fbx', label: '🧍 Idle', speed: 1.0 },
+          'idleSoft': { url: '/animations/Idle.fbx', type: 'fbx', label: '🌿 Idle Soft', speed: 0.75 },
+          'idleFocus': { url: '/animations/Idle.fbx', type: 'fbx', label: '🧠 Idle Focus', speed: 0.55 },
+
+          'talking': { url: '/animations/talking.fbx', type: 'fbx', label: '💬 Talking', speed: 1.0 },
+          'talkCalm': { url: '/animations/talking.fbx', type: 'fbx', label: '🙂 Talk Calm', speed: 0.85 },
+          'talkEnergy': { url: '/animations/talking.fbx', type: 'fbx', label: '⚡ Talk Energetic', speed: 1.2 },
+
+          'arguing': { url: '/animations/standing_arguing.fbx', type: 'fbx', label: '😠 Arguing', speed: 1.0 },
+          'praying': { url: '/animations/praying.fbx', type: 'fbx', label: '🙏 Praying', speed: 1.0 },
+          'armStretch': { url: '/animations/arm_stretching.fbx', type: 'fbx', label: '💪 Arm Stretching', speed: 1.0 },
+          'defeated': { url: '/animations/defeated.fbx', type: 'fbx', label: '😞 Defeated', speed: 1.0 },
+          'hipHop': { url: '/animations/hip_hop_dancing.fbx', type: 'fbx', label: '🕺 Hip Hop', speed: 1.0 },
+          'sambaDancing': { url: '/animations/samba_dancing.fbx', type: 'fbx', label: '💃 Samba Dancing', speed: 1.0 }
         };
 
-        function toAnimKey(file) {
-          return file.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        }
-
-        function toAnimLabel(file) {
-          const base = file.replace(/\.[^.]+$/, '');
-          return `✨ ${base.replace(/[_-]+/g, ' ')}`;
-        }
-
-        async function discoverExtraAnimations() {
-          try {
-            const res = await fetch('/animations/list');
-            const data = await res.json();
-            const files = data?.files || [];
-            const knownUrls = new Set(Object.values(animFiles).map(v => v.url.toLowerCase()));
-            files.forEach((file) => {
-              const lower = file.toLowerCase();
-              const url = `/animations/${file}`;
-              if (knownUrls.has(url.toLowerCase())) return;
-              if (!(lower.endsWith('.fbx') || lower.endsWith('.glb') || lower.endsWith('.gltf'))) return;
-              const key = toAnimKey(file);
-              animFiles[key] = { url, type: lower.endsWith('.fbx') ? 'fbx' : 'gltf', label: toAnimLabel(file), extra: true };
-            });
-          } catch (e) {
-            console.warn('Animation discovery failed', e);
-          }
-        }
-
-        function renderExtraAnimationButtons() {
-          const extraContainer = document.getElementById('extra-animations');
-          if (!extraContainer) return;
-          extraContainer.innerHTML = '';
-          Object.entries(animFiles)
-            .filter(([, cfg]) => cfg.extra)
-            .forEach(([name, cfg]) => {
-              const btn = document.createElement('button');
-              btn.className = 'menu-btn';
-              btn.id = `btn-${name}`;
-              btn.textContent = cfg.label;
-              btn.onclick = () => setAnimation(name);
-              extraContainer.appendChild(btn);
-            });
+        function renderBodyAnimationButtons(loadedKeys) {
+          const container = document.getElementById('body-animation-buttons');
+          if (!container) return;
+          container.innerHTML = '';
+          loadedKeys.forEach((name) => {
+            const cfg = animFiles[name];
+            const btn = document.createElement('button');
+            btn.className = 'menu-btn';
+            btn.id = `btn-${name}`;
+            btn.textContent = cfg?.label || name;
+            btn.onclick = () => setAnimation(name);
+            if (name === 'idle') btn.classList.add('active');
+            container.appendChild(btn);
+          });
         }
         
         // Helper to load based on type
-        async function loadAnimation(name, config) {
+        async function loadAnimation(name, config, sourceCache) {
           if (config.type === 'fbx') {
-            const fbx = await new Promise((resolve, reject) => window.fbxLoader.load(config.url, resolve, undefined, reject));
-            return retargetAnimation(fbx, vrm);
-          } else {
-            const gltf = await new Promise((resolve, reject) => window.gltfLoader.load(config.url, resolve, undefined, reject));
-            if (gltf.animations && gltf.animations.length > 0) {
-              return retargetAnimation(gltf, vrm);
+            if (!sourceCache[config.url]) {
+              const fbx = await new Promise((resolve, reject) => window.fbxLoader.load(config.url, resolve, undefined, reject));
+              sourceCache[config.url] = retargetAnimation(fbx, vrm);
             }
+            return sourceCache[config.url]?.clone?.() || sourceCache[config.url];
           }
           return null;
         }
 
-        discoverExtraAnimations().then(() => {
-          renderExtraAnimationButtons();
-          const loadPromises = Object.entries(animFiles).map(([name, config]) => {
-            return loadAnimation(name, config).then(clip => {
-              if (clip) animations[name] = clip;
-            }).catch(e => console.error('Error loading', name, e));
-          });
+        const sourceCache = {};
+        const loadPromises = Object.entries(animFiles).map(([name, config]) => {
+          return loadAnimation(name, config, sourceCache).then(clip => {
+            if (clip) {
+              animations[name] = clip;
+              animationSettings[name] = config;
+            }
+          }).catch(e => console.warn('Skip animation (load failed):', name, e?.message || e));
+        });
 
-          Promise.all(loadPromises).then(() => {
-            console.log('All animations loaded');
-            loadingEl.textContent = '';  // Hide loading
-            setAnimation('idle'); // Default animation
-            setStatus(`✓ Alles geladen! (${Object.keys(animations).length} Clips)`, 'success');
-          });
+        Promise.all(loadPromises).then(() => {
+          const loadedKeys = Object.keys(animations);
+          renderBodyAnimationButtons(loadedKeys);
+          console.log('Loaded animations:', loadedKeys);
+          loadingEl.textContent = '';  // Hide loading
+          setAnimation(loadedKeys.includes('idle') ? 'idle' : loadedKeys[0]);
+          setStatus(`✓ Alles geladen! (${loadedKeys.length} stabile Clips)`, 'success');
         });
       },
       (progress) => {
@@ -655,7 +629,7 @@
     
     // Animation switcher - use AnimationMixer
     function setAnimation(name) {
-      if (!mixer) return;
+      if (!mixer || !name) return;
       
       const clip = animations[name];
       if (!clip) return;
@@ -672,7 +646,8 @@
       currentAnimationClip = clip;
       
       // Use AnimationMixer
-      mixer.timeScale = 1;
+      const speed = animationSettings[name]?.speed || 1;
+      mixer.timeScale = speed;
       const newAction = mixer.clipAction(clip);
       
       if (action && action !== newAction) {
