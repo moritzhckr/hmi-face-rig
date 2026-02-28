@@ -2,6 +2,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { EdgeTTS } = require('node-edge-tts');
+const { execFile } = require('child_process');
 
 const PORT = 8080;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -24,23 +25,36 @@ function enqueueAudio(item) {
   pushPlaybackEvent('queue.enqueued', { queueId: item.queueId, file: item.file, text: item.text });
 }
 
-function classifyIntentEmotion(text = '') {
-  const t = String(text).toLowerCase();
-  const intent = t.includes('?') ? 'question' : /\b(mach|tu|bitte|setze|öffne|starte)\b/.test(t) ? 'request' : 'statement';
-  const emotion = /\b(super|cool|nice|danke|geil|top)\b/.test(t)
-    ? 'positive'
-    : /\b(schade|problem|hilfe|sorry|traurig)\b/.test(t)
-      ? 'supportive'
-      : 'neutral';
-  return { intent, emotion };
-}
+function runLocalAgentPrompt(prompt) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      'agent',
+      '--local',
+      '--session-id',
+      'webui-face-rig',
+      '--thinking',
+      'off',
+      '--timeout',
+      '45',
+      '--message',
+      String(prompt || ''),
+      '--json'
+    ];
 
-function generateAssistantReply(prompt, cls) {
-  const clean = String(prompt || '').trim();
-  if (!clean) return 'Ich habe nichts verstanden. Sag mir kurz, was ich tun soll.';
-  if (cls.intent === 'question') return `Gute Frage. Kurz gesagt: ${clean} — ich prüfe das und gebe dir direkt eine klare Antwort.`;
-  if (cls.intent === 'request') return `Alles klar, ich setze das für dich um: ${clean}.`;
-  return `Verstanden: ${clean}. Ich bin dran.`;
+    execFile('openclaw', args, { timeout: 50000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        return reject(new Error(stderr || error.message));
+      }
+      try {
+        const parsed = JSON.parse(stdout || '{}');
+        const reply = parsed?.payloads?.[0]?.text || '';
+        if (!reply) return reject(new Error('No assistant reply payload'));
+        resolve(reply);
+      } catch (e) {
+        reject(new Error(`Agent parse error: ${e.message}`));
+      }
+    });
+  });
 }
 
 async function generateAndQueueTTS(text, voice = DEFAULT_VOICE) {
@@ -176,7 +190,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   
-  // Handle /chat endpoint - prompt -> assistant reply -> TTS queue
+  // Handle /chat endpoint - prompt -> local OpenClaw agent reply -> TTS queue
   if (req.method === 'POST' && requestUrl.pathname === '/chat') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -186,12 +200,11 @@ const server = http.createServer((req, res) => {
         const prompt = data.prompt || data.text || '';
         const voice = data.voice || DEFAULT_VOICE;
 
-        const classification = classifyIntentEmotion(prompt);
-        const reply = generateAssistantReply(prompt, classification);
+        const reply = await runLocalAgentPrompt(prompt);
         const ttsOut = await generateAndQueueTTS(reply, voice);
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, prompt, reply, classification, ...ttsOut }));
+        res.end(JSON.stringify({ success: true, prompt, reply, ...ttsOut }));
       } catch (error) {
         console.error('❌ Chat Error:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });

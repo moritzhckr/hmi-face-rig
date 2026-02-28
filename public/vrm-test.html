@@ -174,6 +174,8 @@
 
   <!-- Centered speech controls -->
   <div id="speech-panel">
+    <div id="chat-mini-log" style="max-height:120px;overflow:auto;background:rgba(255,255,255,0.04);border:1px solid #333;border-radius:10px;padding:8px;font-size:12px;line-height:1.35;margin-bottom:8px;"></div>
+    <div id="chat-waiting" style="display:none;font-size:11px;color:#9ad; margin:-2px 0 6px 2px;">⏳ Warte auf Antwort...</div>
     <textarea id="speak-input" placeholder="Schreib etwas oder halte den Mic-Button..." autocomplete="off"></textarea>
     <div id="speech-actions">
       <button class="speech-btn" id="btn-speak" onclick="submitSpeak()">🎤 Senden</button>
@@ -1097,10 +1099,32 @@
 
     setInterval(pollForTTS, 1000);
     
-    // Speak pipeline: user prompt -> assistant reply -> queued avatar speech
+    function appendMiniChat(role, text) {
+      const log = document.getElementById('chat-mini-log');
+      if (!log || !text) return;
+      const row = document.createElement('div');
+      row.style.marginBottom = '6px';
+      row.innerHTML = `<span style="color:${role === 'Du' ? '#9fd' : '#fdb'}">${role}:</span> ${String(text).replace(/</g,'&lt;')}`;
+      log.appendChild(row);
+      while (log.children.length > 10) log.removeChild(log.firstChild);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function setWaitingState(waiting) {
+      const waitEl = document.getElementById('chat-waiting');
+      if (waitEl) waitEl.style.display = waiting ? 'block' : 'none';
+      const sendBtn = document.getElementById('btn-speak');
+      if (sendBtn) sendBtn.disabled = waiting;
+      const holdBtn = document.getElementById('btn-hold-to-speak');
+      if (holdBtn) holdBtn.disabled = waiting;
+    }
+
+    // Speak pipeline: user prompt -> local OpenClaw reply -> queued avatar speech
     window.speakText = function(text) {
       if (!text || text.trim() === '' || isSpeaking) return;
 
+      appendMiniChat('Du', text);
+      setWaitingState(true);
       ttsStatus.textContent = '🧠 Denke nach...';
 
       fetch('/chat', {
@@ -1108,17 +1132,34 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, voice: 'de-DE-ConradNeural' })
       })
-      .then(r => r.json())
+      .then(async (r) => {
+        const contentType = r.headers.get('content-type') || '';
+        if (!r.ok) {
+          const bodyText = await r.text();
+          throw new Error(`HTTP ${r.status}: ${bodyText.slice(0, 160)}`);
+        }
+        if (!contentType.includes('application/json')) {
+          const bodyText = await r.text();
+          throw new Error(`Unerwartete Antwort (kein JSON): ${bodyText.slice(0, 120)}`);
+        }
+        return r.json();
+      })
       .then(data => {
         if (data.success && data.file) {
+          appendMiniChat('Claw', data.reply || '(keine Antwort)');
           ttsStatus.textContent = '✅ Antwort in Queue';
         } else {
           ttsStatus.textContent = '✗ Keine Antwort';
+          appendMiniChat('System', 'Keine Antwort erhalten.');
         }
       })
       .catch(e => {
         console.error('Chat/TTS Error:', e);
         ttsStatus.textContent = '✗ Fehler';
+        appendMiniChat('System', `Fehler: ${e?.message || e}`);
+      })
+      .finally(() => {
+        setWaitingState(false);
       });
     };
 
@@ -1136,7 +1177,7 @@
       const btn = document.getElementById('btn-hold-to-speak');
       if (!btn) return;
       btn.classList.toggle('active', isListening);
-      btn.textContent = isListening ? '🔴 Aufnahme läuft...' : '🗣️ Hold to Speak';
+      btn.textContent = '🗣️ Hold to Speak';
     }
 
     async function startVoiceInput() {
@@ -1236,19 +1277,11 @@
         e.preventDefault();
         stopVoiceInput();
       });
-      holdBtn.addEventListener('pointerleave', () => stopVoiceInput());
       holdBtn.addEventListener('pointercancel', () => stopVoiceInput());
-      holdBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        startVoiceInput();
-      }, { passive: false });
-      holdBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        stopVoiceInput();
-      }, { passive: false });
     }
 
     refreshAudioDevices();
+    appendMiniChat('System', 'Chat bereit. Schreibe oder halte den Mic-Button.');
 
     // Keyboard controls for quick face testing
     window.addEventListener('keydown', (e) => {
