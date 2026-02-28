@@ -107,6 +107,13 @@
     </div>
     
     <div class="menu-section">
+      <h3>Avatar Speak (WebUI)</h3>
+      <textarea id="speak-input" placeholder="Text eingeben..." style="width:100%;min-height:74px;background:rgba(255,255,255,0.05);border:1px solid #333;border-radius:8px;color:white;padding:10px;font-size:13px;resize:vertical;"></textarea>
+      <button class="menu-btn" id="btn-speak" style="margin-top:8px;text-align:center;" onclick="submitSpeak()">🎤 Senden an Avatar</button>
+      <div style="font-size:11px;color:#777;margin-top:6px;">Enter = senden · Shift+Enter = Zeilenumbruch</div>
+    </div>
+
+    <div class="menu-section">
       <h3>Info</h3>
       <div style="font-size:11px;color:#666;">
         Drück <b>D</b> für Debug<br>
@@ -732,6 +739,22 @@
         ttsStatus.textContent = '✗ Fehler';
       });
     };
+
+    window.submitSpeak = function() {
+      const input = document.getElementById('speak-input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+      window.speakText(text);
+      input.value = '';
+    };
+
+    document.getElementById('speak-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        window.submitSpeak();
+      }
+    });
 
     // Keyboard controls for quick face testing
     window.addEventListener('keydown', (e) => {
