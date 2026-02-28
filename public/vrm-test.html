@@ -858,7 +858,8 @@
       .then(r => r.json())
       .then(data => {
         if (data.success && data.file) {
-          playAudioFile(text, data.file, data.queueId || null);
+          // Playback comes from /audio/queue polling to avoid double-trigger.
+          ttsStatus.textContent = '✅ In Queue';
         }
       })
       .catch(e => {
