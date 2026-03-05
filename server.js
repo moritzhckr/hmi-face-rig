@@ -15,6 +15,58 @@ const audioQueue = [];
 const playbackEvents = [];
 const MAX_EVENTS = 200;
 
+// ==================== Faster Whisper STT ====================
+let whisperModel = null;
+
+async function getWhisperModel() {
+  if (!whisperModel) {
+    console.log('Loading faster-whisper model...');
+    const { WhisperModel } = await import('faster-whisper');
+    whisperModel = new WhisperModel('small', { device: 'cpu' });
+    console.log('✅ Whisper model loaded (small, CPU)');
+  }
+  return whisperModel;
+}
+
+// Call external STT server (Whisper on port 8765)
+function transcribeAudio(audioBuffer) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'localhost',
+      port: 8765,
+      path: '/stt',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'audio/webm',
+        'Content-Length': audioBuffer.length
+      }
+    };
+    
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(data);
+          if (result.success && result.transcript) {
+            console.log('📝 Whisper transcription:', result.transcript);
+            resolve(result.transcript.trim());
+          } else {
+            reject(new Error(result.error || 'STT failed'));
+          }
+        } catch(e) {
+          reject(e);
+        }
+      });
+    });
+    
+    req.on('error', reject);
+    req.write(audioBuffer);
+    req.end();
+  });
+}
+
+
 function pushPlaybackEvent(type, payload = {}) {
   playbackEvents.push({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, ts: Date.now(), type, ...payload });
   if (playbackEvents.length > MAX_EVENTS) playbackEvents.splice(0, playbackEvents.length - MAX_EVENTS);
@@ -190,6 +242,57 @@ const server = http.createServer((req, res) => {
     return;
   }
   
+  // Handle /agent/call-turn endpoint - transcript -> local OpenClaw agent reply -> TTS queue
+  if (req.method === 'POST' && requestUrl.pathname === '/agent/call-turn') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const contentType = req.headers['content-type'] || '';
+        let transcript = '';
+        let voice = DEFAULT_VOICE;
+        
+        if (contentType.includes('application/json')) {
+          const data = JSON.parse(body || '{}');
+          transcript = data.transcript || data.prompt || data.text || '';
+          voice = data.voice || DEFAULT_VOICE;
+        } else {
+          // Raw text
+          transcript = body.trim();
+        }
+        
+        if (!transcript) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'transcript required' }));
+          return;
+        }
+
+        const reply = await runLocalAgentPrompt(transcript);
+        const ttsOut = await generateAndQueueTTS(reply, voice);
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          mode: 'agent-call',
+          transcript,
+          reply,
+          queue: {
+            queueId: ttsOut.queueId,
+            file: ttsOut.file,
+            text: ttsOut.text,
+            url: '/audio/' + ttsOut.file
+          },
+          ...ttsOut
+        }));
+      } catch (error) {
+        console.error('❌ Agent Call Turn Error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: error.message }));
+      }
+    });
+    return;
+  }
+
   // Handle /chat endpoint - prompt -> local OpenClaw agent reply -> TTS queue
   if (req.method === 'POST' && requestUrl.pathname === '/chat') {
     let body = '';
@@ -239,6 +342,62 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+
+  // ==================== /stt endpoint - Local Whisper STT ====================
+  if (req.method === 'POST' && requestUrl.pathname === '/stt') {
+    const contentType = req.headers['content-type'] || '';
+    
+    if (!contentType.includes('multipart/form-data')) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'multipart/form-data required' }));
+      return;
+    }
+    
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', async () => {
+      try {
+        const buffer = Buffer.concat(chunks);
+        const boundaryMatch = contentType.match(/boundary=(.+)/);
+        if (!boundaryMatch) throw new Error('No boundary found');
+        const boundary = boundaryMatch[1];
+        
+        // Simple multipart parser - extract audio data
+        const parts = buffer.toString('binary').split('--' + boundary);
+        let audioData = null;
+        
+        for (const part of parts) {
+          if (part.includes('audio') || part.includes('webm') || part.includes('blob')) {
+            const audioStart = part.indexOf('\r\n\r\n');
+            if (audioStart > 0) {
+              const partData = part.slice(audioStart + 4).replace(/\r\n--$/, '');
+              audioData = Buffer.from(partData, 'binary');
+              break;
+            }
+          }
+        }
+        
+        if (!audioData || audioData.length < 100) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'No audio data found' }));
+          return;
+        }
+        
+        console.log(`🎙️ Transcribing ${audioData.length} bytes...`);
+        const transcript = await transcribeAudio(audioData);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, transcript }));
+        
+      } catch (error) {
+        console.error('❌ STT Error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      }
+    });
+    return;
+  }
+
   
   // Handle VRM upload
   if (req.method === 'POST' && req.url === '/upload-vrm') {

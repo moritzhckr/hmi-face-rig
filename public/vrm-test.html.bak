@@ -177,11 +177,17 @@
   <div id="speech-panel">
     <div id="chat-mini-log" style="max-height:120px;overflow:auto;background:rgba(255,255,255,0.04);border:1px solid #333;border-radius:10px;padding:8px;font-size:12px;line-height:1.35;margin-bottom:8px;"></div>
     <div id="chat-waiting" style="display:none;font-size:11px;color:#9ad; margin:-2px 0 6px 2px;">⏳ Warte auf Antwort...</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="speak-input" placeholder="Oder Text eingeben..." autocomplete="off" style="flex:1;min-height:38px;background:rgba(255,255,255,0.06);border:1px solid #333;border-radius:10px;color:white;padding:8px;" />
-      <button class="speech-btn" id="btn-hold-to-speak" style="min-width:90px;height:42px;background:rgba(80,30,30,0.6);">🎤 Sprechen</button>
+    <input id="speak-input" placeholder="Live-Transkript erscheint hier..." autocomplete="off" style="width:100%;min-height:38px;background:rgba(255,255,255,0.06);border:1px solid #333;border-radius:10px;color:white;padding:8px;" />
+    <div id="webrtc-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <button class="speech-btn" id="btn-webrtc-host" onclick="startWebrtcHost()">📞 Host Call</button>
+      <button class="speech-btn" id="btn-webrtc-join" onclick="joinWebrtcCall()">🔗 Join Call</button>
     </div>
-    <div id="speech-hint" style="font-size:11px;color:#777;margin-top:6px;text-align:center;">Halten + Sprechen → Avatar antwortet</div>
+    <input id="webrtc-session-id" placeholder="Session ID (für Join)" style="margin-top:8px;width:100%;min-height:38px;background:rgba(255,255,255,0.06);border:1px solid #333;border-radius:10px;color:white;padding:8px;" />
+    <button class="speech-btn" id="btn-hold-to-speak" style="margin-top:8px;width:100%;background:rgba(80,30,30,0.6);">🎤 Halten zum Sprechen</button>
+    <button class="speech-btn" id="btn-agent-call-toggle" style="margin-top:8px;width:100%;">🎙️ Agent Call (auto)</button>
+    <button class="speech-btn" id="btn-webrtc-hangup" style="margin-top:8px;width:100%;" onclick="hangupWebrtcCall()">🛑 Call beenden</button>
+    <button class="speech-btn" id="btn-permission" style="margin-top:8px;width:100%;" onclick="initBrowserPermissions()">🔐 Browser-Zugriff erlauben</button>
+    <div id="speech-hint">Agent Call: dauerhaft zuhören, automatisch senden, automatisch antworten</div>
   </div>
   
   <!-- Menu Toggle -->
@@ -219,13 +225,6 @@
     </div>
     
     <!-- speech controls moved to centered overlay -->
-
-    <div class="menu-section">
-      <h3>Audio</h3>
-      <button class="menu-btn" onclick="initBrowserPermissions()">🔐 Browser-Zugriff erlauben</button>
-      <button class="menu-btn" onclick="refreshAudioDevices()">🔄 Audio Devices aktualisieren</button>
-      <select id="audio-input-select" style="width:100%;min-height:38px;background:rgba(255,255,255,0.08);border:1px solid #333;border-radius:8px;color:white;padding:8px;margin-top:4px;"></select>
-    </div>
 
     <div class="menu-section">
       <h3>Info</h3>
@@ -1503,112 +1502,86 @@
       }
     });
 
-    // Hold-to-Talk via MediaRecorder - Audio wird an Server/STT gesendet
+    // Hold-to-Talk: Button gedrückt halten → lauschen, loslassen → senden
     let holdToTalkActive = false;
-    let mediaRecorder = null;
-    let audioChunks = [];
+    let holdToTalkRecognition = null;
     
     async function startHoldToTalk() {
       if (holdToTalkActive) return;
       if (!audioEnabled) await window.initBrowserPermissions();
       
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        ttsStatus.textContent = '✗ SpeechRecognition nicht unterstützt';
+        return;
+      }
+      
       holdToTalkActive = true;
-      const btn = document.getElementById('btn-hold-to-speak');
-      btn.classList.add('active');
-      btn.textContent = '🎤 🔴 Aufnahme läuft...';
-      ttsStatus.textContent = '🎤 Aufnahme gestartet...';
+      document.getElementById('btn-hold-to-speak').classList.add('active');
+      document.getElementById('btn-hold-to-speak').textContent = '🎤 🔴 Spreche jetzt...';
       
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const micOk = await ensureMicrophoneReady();
+        if (!micOk) throw new Error('Mic nicht bereit');
         
-        audioChunks = [];
-        mediaRecorder = new MediaRecorder(stream);
+        holdToTalkRecognition = new SR();
+        holdToTalkRecognition.lang = 'de-DE';
+        holdToTalkRecognition.interimResults = false;
+        holdToTalkRecognition.continuous = false;
         
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
+        let finalTranscript = '';
+        
+        holdToTalkRecognition.onresult = (event) => {
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              finalTranscript = event.results[i][0].transcript.trim();
+            }
           }
         };
         
-        mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-          stream.getTracks().forEach(track => track.stop());
-          
-          if (audioChunks.length === 0 || audioBlob.size < 1000) {
-            ttsStatus.textContent = '⌛ Keine Aufnahme, versuch es nochmal';
-            resetHoldToTalk();
-            return;
+        holdToTalkRecognition.onstart = () => {
+          ttsStatus.textContent = '🎙️ Höre zu...';
+        };
+        
+        holdToTalkRecognition.onend = () => {
+          console.log('SpeechRecognition ended, transcript:', finalTranscript);
+          if (finalTranscript && finalTranscript.length > 0) {
+            ttsStatus.textContent = '📤 Sende: ' + finalTranscript.substring(0, 30) + '...';
+            window.speakText(finalTranscript, '/agent/call-turn');
+          } else {
+            ttsStatus.textContent = '⌛ Warte auf Sprache... (oder loslassen zum Abbrechen)';
           }
-          
-          ttsStatus.textContent = '🎙️ Transkribiere...';
-          
-          try {
-            const sttFormData = new FormData();
-            sttFormData.append('audio', audioBlob, 'recording.webm');
-            
-            const sttResponse = await fetch('/stt', {
-              method: 'POST',
-              body: sttFormData
-            });
-            
-            const sttData = await sttResponse.json();
-            
-            if (!sttData.success || !sttData.transcript) {
-              console.error('STT failed:', sttData);
-              ttsStatus.textContent = '✗ Transkription fehlgeschlagen';
-              resetHoldToTalk();
-              return;
-            }
-            
-            const transcript = sttData.transcript.trim();
-            ttsStatus.textContent = '📤 Text: ' + transcript.substring(0, 30) + '...';
-            
-            const response = await fetch('/agent/call-turn', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                transcript: transcript,
-                voice: 'de-DE-ConradNeural'
-              })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-              appendMiniChat('Du', transcript);
-              appendMiniChat('Claw', data.reply || '(Antwort)');
-              
-              if (data.file && shouldUseLocalPlayback()) {
-                playAudioFile(data.reply || data.text || '', data.file, data.queueId || null);
-                ttsStatus.textContent = '✅ Antwort wird abgespielt';
-              } else {
-                ttsStatus.textContent = '✅ Antwort bereit';
-              }
-            } else {
-              ttsStatus.textContent = '✗ Agent antwortet nicht';
-            }
-          } catch (err) {
-            console.error('Audio processing error:', err);
-            ttsStatus.textContent = '✗ Fehler: ' + err.message;
-          }
-          
           resetHoldToTalk();
         };
         
-        mediaRecorder.start(100);
+        holdToTalkRecognition.onerror = (event) => {
+          console.error('Hold-to-talk error:', event.error, event);
+          if (event.error === 'no-speech') {
+            ttsStatus.textContent = '⌛ Keine Sprache erkannt, versuch es nochmal';
+          } else if (event.error === 'not-allowed') {
+            ttsStatus.textContent = '✗ Mic nicht erlaubt';
+          } else if (event.error === 'network') {
+            ttsStatus.textContent = '✗ Netzwerkfehler';
+          } else {
+            ttsStatus.textContent = '✗ Fehler: ' + event.error;
+          }
+          resetHoldToTalk();
+        };
+        
+        holdToTalkRecognition.start();
         
       } catch (e) {
         console.error('Hold-to-talk start error:', e);
-        ttsStatus.textContent = '✗ Mic-Fehler: ' + e.message;
+        ttsStatus.textContent = '✗ Start-Fehler: ' + e.message;
         resetHoldToTalk();
       }
     }
     
     function resetHoldToTalk() {
       holdToTalkActive = false;
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        try { mediaRecorder.stop(); } catch(e) {}
-        mediaRecorder = null;
+      if (holdToTalkRecognition) {
+        try { holdToTalkRecognition.stop(); } catch(e) {}
+        holdToTalkRecognition = null;
       }
       const btn = document.getElementById('btn-hold-to-speak');
       if (btn) {
@@ -1617,6 +1590,7 @@
       }
     }
     
+    // Hold-to-Talk Events
     const holdBtn = document.getElementById('btn-hold-to-speak');
     if (holdBtn) {
       holdBtn.addEventListener('mousedown', startHoldToTalk);
